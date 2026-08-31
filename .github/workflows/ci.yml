@@ -1,8 +1,11 @@
 name: CI
 
 on:
+  # Sem filtro de branch no push: o repositório ainda não tem uma branch
+  # "main" separada (todo o desenvolvimento até aqui aconteceu direto em
+  # claude/projeto-prompt-9qarlc) — restringir a "main" fazia o CI nunca
+  # rodar em push nenhum.
   push:
-    branches: [main]
   pull_request:
 
 jobs:
