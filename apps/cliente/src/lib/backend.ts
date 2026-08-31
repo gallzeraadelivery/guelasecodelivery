@@ -42,3 +42,18 @@ export async function createOrder(
 
   return body as CreateOrderResponse;
 }
+
+export async function createCheckout(accessToken: string, orderId: string): Promise<{ checkoutUrl: string }> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/checkout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao iniciar pagamento.", response.status);
+  }
+
+  return body as { checkoutUrl: string };
+}

@@ -27,6 +27,8 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [mpConnected, setMpConnected] = useState(false);
+  const [connectingMp, setConnectingMp] = useState(false);
   const [rows, setRows] = useState<EditableRow[]>([]);
 
   const loadDashboard = useCallback(async () => {
@@ -41,9 +43,12 @@ export default function DashboardPage() {
 
     const { data: membership, error: membershipError } = await supabase
       .from("partner_users")
-      .select("partner_id, partners(trade_name)")
+      .select("partner_id, partners(trade_name, mercadopago_account_id)")
       .eq("profile_id", session.user.id)
-      .maybeSingle<{ partner_id: string; partners: { trade_name: string } | null }>();
+      .maybeSingle<{
+        partner_id: string;
+        partners: { trade_name: string; mercadopago_account_id: string | null } | null;
+      }>();
 
     if (membershipError) {
       setError(membershipError.message);
@@ -59,6 +64,7 @@ export default function DashboardPage() {
 
     setPartnerId(membership.partner_id);
     setPartnerName(membership.partners?.trade_name ?? null);
+    setMpConnected(Boolean(membership.partners?.mercadopago_account_id));
 
     const { data: products, error: productsError } = await supabase
       .from("partner_products")
@@ -132,6 +138,40 @@ export default function DashboardPage() {
     router.replace("/login");
   }
 
+  async function handleConnectMercadoPago() {
+    if (!partnerId) return;
+    setConnectingMp(true);
+    setError(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3333";
+      const response = await fetch(`${backendUrl}/partners/${partnerId}/mercadopago/connect`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await response.json();
+
+      if (!response.ok) {
+        setError(body.error ?? "Falha ao iniciar conexão com o Mercado Pago.");
+        return;
+      }
+
+      window.location.href = body.url;
+    } catch {
+      setError("Não foi possível conectar ao backend agora.");
+    } finally {
+      setConnectingMp(false);
+    }
+  }
+
   if (loading) {
     return <div className="p-8 text-sm text-zinc-600 dark:text-zinc-400">Carregando...</div>;
   }
@@ -157,12 +197,27 @@ export default function DashboardPage() {
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Catálogo e estoque</p>
           </div>
-          <button
-            onClick={handleSignOut}
-            className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
-          >
-            Sair
-          </button>
+          <div className="flex items-center gap-3">
+            {mpConnected ? (
+              <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                Mercado Pago conectado
+              </span>
+            ) : (
+              <button
+                onClick={handleConnectMercadoPago}
+                disabled={connectingMp}
+                className="rounded bg-[#009ee3] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {connectingMp ? "Conectando..." : "Conectar Mercado Pago"}
+              </button>
+            )}
+            <button
+              onClick={handleSignOut}
+              className="rounded border border-zinc-300 px-3 py-1.5 text-sm text-black dark:border-zinc-700 dark:text-zinc-50"
+            >
+              Sair
+            </button>
+          </div>
         </header>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

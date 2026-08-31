@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
 import { useCart } from "../../src/context/cart";
 import { supabase } from "../../src/lib/supabase";
-import { BackendError, createOrder } from "../../src/lib/backend";
+import { BackendError, createCheckout, createOrder } from "../../src/lib/backend";
 
 function formatCents(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2)}`;
@@ -52,11 +53,26 @@ export default function CartScreen() {
       );
 
       clear();
+
+      let checkout;
+      try {
+        checkout = await createCheckout(session.access_token, result.orderId);
+      } catch (checkoutError) {
+        const message =
+          checkoutError instanceof BackendError && checkoutError.status === 409
+            ? checkoutError.message
+            : "Não foi possível iniciar o pagamento agora. Você pode tentar novamente em breve.";
+        Alert.alert(
+          `Pedido criado — ${result.partner.tradeName}`,
+          `Chega em aproximadamente ${result.etaMinutes} min · Total: ${formatCents(result.totalCents)}\n\n${message}`,
+        );
+        return;
+      }
+
+      await WebBrowser.openBrowserAsync(checkout.checkoutUrl);
       Alert.alert(
-        "Pedido criado!",
-        `${result.partner.tradeName}\nChega em aproximadamente ${result.etaMinutes} min\n` +
-          `Total: ${formatCents(result.totalCents)}\n\n` +
-          "Pagamento em breve (Fase 5) — seu estoque já está reservado.",
+        "Pagamento",
+        "Se você concluiu o pagamento, seu pedido será confirmado em instantes.",
       );
     } catch (error) {
       if (error instanceof BackendError && error.status === 422) {
