@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Env } from "./env.js";
+import { driversRoutes } from "./modules/drivers/drivers.routes.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
 import { ordersRoutes } from "./modules/orders/orders.routes.js";
 import { partnersRoutes } from "./modules/partners/partners.routes.js";
@@ -23,6 +24,7 @@ export function buildApp(env: Env): FastifyInstance {
   app.decorate("config", env);
 
   app.register(healthRoutes);
+  app.register(driversRoutes);
   app.register(ordersRoutes);
   app.register(partnersRoutes);
   app.register(paymentsRoutes);

@@ -19,6 +19,7 @@ const envSchema = z.object({
   MERCADOPAGO_CLIENT_ID: z.string().min(1).optional(),
   MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
   MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  BITCOINP2P_API_KEY: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
