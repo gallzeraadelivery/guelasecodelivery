@@ -11,6 +11,7 @@ export default function TabsLayout() {
         name="cart"
         options={{ title: totalItems > 0 ? `Carrinho (${totalItems})` : "Carrinho" }}
       />
+      <Tabs.Screen name="orders" options={{ title: "Pedidos" }} />
       <Tabs.Screen name="profile" options={{ title: "Perfil" }} />
     </Tabs>
   );

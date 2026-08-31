@@ -12,9 +12,24 @@ import {
 import * as Location from "expo-location";
 import { useSession } from "../../src/context/session";
 import { supabase } from "../../src/lib/supabase";
-import { acceptOffer, rejectOffer, submitKyc } from "../../src/lib/backend";
+import {
+  acceptOffer,
+  markArrivedAtPickup,
+  markDelivered,
+  markPickedUp,
+  rejectOffer,
+  submitKyc,
+} from "../../src/lib/backend";
 
 type DriverRow = { status: string; kyc_status: string };
+
+const ACTIVE_DELIVERY_STATUSES = ["TO_PICKUP", "AT_PICKUP", "DELIVERING"];
+
+type ActiveDelivery = {
+  id: string;
+  status: string;
+  partners: { trade_name: string } | null;
+};
 
 type OfferRow = {
   id: string;
@@ -41,6 +56,8 @@ export default function StatusScreen() {
   const [togglingStatus, setTogglingStatus] = useState(false);
   const [offer, setOffer] = useState<OfferRow | null>(null);
   const [respondingOffer, setRespondingOffer] = useState(false);
+  const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null);
+  const [updatingDelivery, setUpdatingDelivery] = useState(false);
 
   const [cpf, setCpf] = useState("");
   const [cnhNumber, setCnhNumber] = useState("");
@@ -97,6 +114,25 @@ export default function StatusScreen() {
     const interval = setInterval(() => void pollOffer(), OFFER_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [driver?.status, pollOffer]);
+
+  const loadActiveDelivery = useCallback(async () => {
+    if (!session) return;
+    const { data } = await supabase
+      .from("deliveries")
+      .select("id, status, partners(trade_name)")
+      .eq("driver_id", session.user.id)
+      .in("status", ACTIVE_DELIVERY_STATUSES)
+      .maybeSingle<ActiveDelivery>();
+    setActiveDelivery(data);
+  }, [session]);
+
+  useEffect(() => {
+    if (driver && ACTIVE_DELIVERY_STATUSES.includes(driver.status)) {
+      void loadActiveDelivery();
+    } else {
+      setActiveDelivery(null);
+    }
+  }, [driver, loadActiveDelivery]);
 
   async function startLocationUpdates() {
     if (!session) return;
@@ -182,6 +218,19 @@ export default function StatusScreen() {
     }
   }
 
+  async function handleDeliveryStep(action: (token: string, deliveryId: string) => Promise<void>) {
+    if (!session || !activeDelivery) return;
+    setUpdatingDelivery(true);
+    try {
+      await action(session.access_token, activeDelivery.id);
+      await Promise.all([loadDriver(), loadActiveDelivery()]);
+    } catch (error) {
+      Alert.alert("Não foi possível atualizar", (error as Error).message);
+    } finally {
+      setUpdatingDelivery(false);
+    }
+  }
+
   async function handleSubmitKyc() {
     if (!session) return;
     if (!cpf.trim() || !cnhNumber.trim() || !cnhCategory.trim()) {
@@ -260,12 +309,62 @@ export default function StatusScreen() {
   if (driver.status !== "ONLINE" && driver.status !== "OFFLINE") {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Corrida em andamento</Text>
-        <Text style={styles.subtitle}>Status: {driver.status}</Text>
-        <Text style={styles.note}>
-          Acompanhamento de retirada e entrega chega numa próxima fase — por enquanto, siga a
-          corrida combinada com a distribuidora.
-        </Text>
+        <Text style={styles.title}>{activeDelivery?.partners?.trade_name ?? "Corrida em andamento"}</Text>
+
+        {!activeDelivery ? (
+          <ActivityIndicator />
+        ) : (
+          <>
+            {activeDelivery.status === "TO_PICKUP" && (
+              <>
+                <Text style={styles.subtitle}>A caminho da distribuidora para retirar o pedido.</Text>
+                <Pressable
+                  style={styles.button}
+                  onPress={() => handleDeliveryStep(markArrivedAtPickup)}
+                  disabled={updatingDelivery}
+                >
+                  {updatingDelivery ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Cheguei na distribuidora</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+            {activeDelivery.status === "AT_PICKUP" && (
+              <>
+                <Text style={styles.subtitle}>Você está na distribuidora. Confira o pedido antes de sair.</Text>
+                <Pressable
+                  style={styles.button}
+                  onPress={() => handleDeliveryStep(markPickedUp)}
+                  disabled={updatingDelivery}
+                >
+                  {updatingDelivery ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Retirei o pedido</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+            {activeDelivery.status === "DELIVERING" && (
+              <>
+                <Text style={styles.subtitle}>A caminho do cliente.</Text>
+                <Pressable
+                  style={styles.button}
+                  onPress={() => handleDeliveryStep(markDelivered)}
+                  disabled={updatingDelivery}
+                >
+                  {updatingDelivery ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Entreguei ao cliente</Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </>
+        )}
       </View>
     );
   }

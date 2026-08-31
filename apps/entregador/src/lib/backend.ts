@@ -52,3 +52,28 @@ export const acceptOffer = (accessToken: string, offerId: string) =>
 
 export const rejectOffer = (accessToken: string, offerId: string) =>
   respondToOffer(accessToken, offerId, "reject");
+
+async function markDeliveryStep(
+  accessToken: string,
+  deliveryId: string,
+  step: "arrived" | "picked-up" | "delivered",
+): Promise<void> {
+  const response = await fetch(`${backendUrl}/deliveries/${deliveryId}/${step}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.json();
+    throw new BackendError(body.error ?? "Falha ao atualizar a entrega.", response.status);
+  }
+}
+
+export const markArrivedAtPickup = (accessToken: string, deliveryId: string) =>
+  markDeliveryStep(accessToken, deliveryId, "arrived");
+
+export const markPickedUp = (accessToken: string, deliveryId: string) =>
+  markDeliveryStep(accessToken, deliveryId, "picked-up");
+
+export const markDelivered = (accessToken: string, deliveryId: string) =>
+  markDeliveryStep(accessToken, deliveryId, "delivered");
