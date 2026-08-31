@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "guelaseco",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
@@ -20,6 +21,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O GUELA SECO usa sua localização para encontrar distribuidoras próximas e calcular o tempo de entrega."
+        }
+      ]
+    ]
   }
 }
