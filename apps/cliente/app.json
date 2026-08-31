@@ -8,9 +8,11 @@
     "scheme": "guelaseco",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.guelaseco.cliente"
     },
     "android": {
+      "package": "br.com.guelaseco.cliente",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
