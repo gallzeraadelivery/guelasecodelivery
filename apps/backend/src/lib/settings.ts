@@ -40,3 +40,10 @@ export const driverPayoutRuleSchema = z.object({
 });
 
 export type DriverPayoutRuleSetting = z.infer<typeof driverPayoutRuleSchema>;
+
+export const withdrawalRuleSchema = z.object({
+  min_cents: z.number().int().positive(),
+  max_cents: z.number().int().positive(),
+});
+
+export type WithdrawalRuleSetting = z.infer<typeof withdrawalRuleSchema>;

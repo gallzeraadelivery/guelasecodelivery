@@ -77,3 +77,27 @@ export const markPickedUp = (accessToken: string, deliveryId: string) =>
 
 export const markDelivered = (accessToken: string, deliveryId: string) =>
   markDeliveryStep(accessToken, deliveryId, "delivered");
+
+export type PixKeyType = "CPF" | "CNPJ" | "EMAIL" | "PHONE" | "RANDOM";
+
+export async function requestWithdrawal(
+  accessToken: string,
+  input: { amountCents: number; pixKey: string; pixKeyType: PixKeyType; holderName: string },
+): Promise<{ withdrawalId: string; status: string }> {
+  const response = await fetch(`${backendUrl}/wallet/withdrawals`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao solicitar saque.", response.status);
+  }
+
+  return body as { withdrawalId: string; status: string };
+}

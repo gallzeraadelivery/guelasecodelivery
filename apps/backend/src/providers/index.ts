@@ -3,6 +3,8 @@ import { BitcoinP2PKycProvider } from "./bitcoinp2p-kyc-provider.js";
 import type { KYCProvider } from "./kyc-provider.js";
 import { MercadoPagoPaymentProvider } from "./mercadopago-payment-provider.js";
 import type { PaymentProvider } from "./payment-provider.js";
+import type { PayoutProvider } from "./payout-provider.js";
+import { UnconfiguredPayoutProvider } from "./unconfigured-payout-provider.js";
 
 export function getPaymentProvider(env: Env): PaymentProvider {
   if (
@@ -34,5 +36,11 @@ export function getKycProvider(env: Env): KYCProvider {
   return new BitcoinP2PKycProvider(env.BITCOINP2P_API_KEY);
 }
 
+export function getPayoutProvider(_env: Env): PayoutProvider {
+  // Nenhum provedor real de PIX foi decidido ainda — ver unconfigured-payout-provider.ts.
+  return new UnconfiguredPayoutProvider();
+}
+
 export type { PaymentProvider } from "./payment-provider.js";
 export type { KYCProvider } from "./kyc-provider.js";
+export type { PayoutProvider } from "./payout-provider.js";

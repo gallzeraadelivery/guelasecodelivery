@@ -8,6 +8,7 @@ import { partnersRoutes } from "./modules/partners/partners.routes.js";
 import { paymentsRoutes } from "./modules/payments/payments.routes.js";
 import { webhooksRoutes } from "./modules/payments/webhooks.routes.js";
 import { dispatchRoutes } from "./modules/dispatch/dispatch.routes.js";
+import { walletRoutes } from "./modules/wallet/wallet.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -33,6 +34,7 @@ export function buildApp(env: Env): FastifyInstance {
   app.register(paymentsRoutes);
   app.register(webhooksRoutes);
   app.register(dispatchRoutes);
+  app.register(walletRoutes);
 
   return app;
 }
