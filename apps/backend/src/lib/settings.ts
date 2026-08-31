@@ -33,3 +33,10 @@ export const serviceFeeRuleSchema = z.object({
 });
 
 export type ServiceFeeRule = z.infer<typeof serviceFeeRuleSchema>;
+
+export const driverPayoutRuleSchema = z.object({
+  min_cents: z.number().int().nonnegative(),
+  per_km_cents: z.number().int().nonnegative(),
+});
+
+export type DriverPayoutRuleSetting = z.infer<typeof driverPayoutRuleSchema>;

@@ -30,3 +30,25 @@ export async function submitKyc(
 
   return body as { status: string };
 }
+
+async function respondToOffer(
+  accessToken: string,
+  offerId: string,
+  action: "accept" | "reject",
+): Promise<void> {
+  const response = await fetch(`${backendUrl}/deliveries/offers/${offerId}/${action}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.json();
+    throw new BackendError(body.error ?? "Falha ao responder à oferta.", response.status);
+  }
+}
+
+export const acceptOffer = (accessToken: string, offerId: string) =>
+  respondToOffer(accessToken, offerId, "accept");
+
+export const rejectOffer = (accessToken: string, offerId: string) =>
+  respondToOffer(accessToken, offerId, "reject");

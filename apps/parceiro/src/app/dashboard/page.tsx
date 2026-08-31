@@ -11,6 +11,15 @@ type EditableRow = PartnerProductWithStock & {
   saving: boolean;
 };
 
+type PartnerOrder = {
+  id: string;
+  status: string;
+  total_cents: number | null;
+  created_at: string;
+};
+
+const ORDER_ACTIONABLE_STATUSES = ["PARTNER_CONFIRMATION", "PREPARING"];
+
 function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
 }
@@ -30,6 +39,8 @@ export default function DashboardPage() {
   const [mpConnected, setMpConnected] = useState(false);
   const [connectingMp, setConnectingMp] = useState(false);
   const [rows, setRows] = useState<EditableRow[]>([]);
+  const [orders, setOrders] = useState<PartnerOrder[]>([]);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     const {
@@ -88,6 +99,16 @@ export default function DashboardPage() {
         saving: false,
       })),
     );
+
+    const { data: partnerOrders } = await supabase
+      .from("orders")
+      .select("id, status, total_cents, created_at")
+      .eq("partner_id", membership.partner_id)
+      .in("status", ORDER_ACTIONABLE_STATUSES)
+      .order("created_at", { ascending: true })
+      .returns<PartnerOrder[]>();
+
+    setOrders(partnerOrders ?? []);
     setLoading(false);
   }, [router]);
 
@@ -172,6 +193,40 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleOrderAction(orderId: string, action: "accept" | "ready") {
+    setProcessingOrderId(orderId);
+    setError(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3333";
+      const response = await fetch(`${backendUrl}/orders/${orderId}/${action}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await response.json();
+
+      if (!response.ok) {
+        setError(body.error ?? "Falha ao atualizar o pedido.");
+        return;
+      }
+
+      await loadDashboard();
+    } catch {
+      setError("Não foi possível conectar ao backend agora.");
+    } finally {
+      setProcessingOrderId(null);
+    }
+  }
+
   if (loading) {
     return <div className="p-8 text-sm text-zinc-600 dark:text-zinc-400">Carregando...</div>;
   }
@@ -221,6 +276,57 @@ export default function DashboardPage() {
         </header>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Pedidos</h2>
+          <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-200 text-left text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+                  <th className="px-4 py-2">Pedido</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Total</th>
+                  <th className="px-4 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                      Nenhum pedido aguardando ação.
+                    </td>
+                  </tr>
+                )}
+                {orders.map((order) => (
+                  <tr key={order.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
+                    <td className="px-4 py-2 font-mono text-xs text-black dark:text-zinc-50">
+                      {order.id.slice(0, 8)}
+                    </td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">{order.status}</td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {order.total_cents != null ? `R$ ${(order.total_cents / 100).toFixed(2)}` : "—"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() =>
+                          handleOrderAction(order.id, order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready")
+                        }
+                        disabled={processingOrderId === order.id}
+                        className="rounded bg-black px-3 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                      >
+                        {processingOrderId === order.id
+                          ? "Enviando..."
+                          : order.status === "PARTNER_CONFIRMATION"
+                            ? "Aceitar"
+                            : "Pedido pronto"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <table className="w-full text-sm">

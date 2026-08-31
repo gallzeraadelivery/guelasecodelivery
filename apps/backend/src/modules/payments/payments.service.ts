@@ -140,6 +140,9 @@ export async function applyPaymentWebhookEvent(
   if (details.status === "APPROVED" && order.status === "AWAITING_PAYMENT") {
     await transitionOrder(db, orderId, "AWAITING_PAYMENT", "PAID", { reason: "payment_approved" });
     await db.rpc("confirm_order_stock", { p_order_id: orderId });
+    // Pedido pago já aparece para a distribuidora confirmar (seção 2: "Aceita
+    // e prepara" vem antes do dispatch).
+    await transitionOrder(db, orderId, "PAID", "PARTNER_CONFIRMATION", { reason: "awaiting_partner" });
   } else if (
     (details.status === "REJECTED" || details.status === "CANCELLED") &&
     order.status === "AWAITING_PAYMENT"

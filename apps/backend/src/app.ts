@@ -3,9 +3,11 @@ import type { Env } from "./env.js";
 import { driversRoutes } from "./modules/drivers/drivers.routes.js";
 import { healthRoutes } from "./modules/health/health.routes.js";
 import { ordersRoutes } from "./modules/orders/orders.routes.js";
+import { partnerOrderActionsRoutes } from "./modules/orders/partner-actions.routes.js";
 import { partnersRoutes } from "./modules/partners/partners.routes.js";
 import { paymentsRoutes } from "./modules/payments/payments.routes.js";
 import { webhooksRoutes } from "./modules/payments/webhooks.routes.js";
+import { dispatchRoutes } from "./modules/dispatch/dispatch.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -26,9 +28,11 @@ export function buildApp(env: Env): FastifyInstance {
   app.register(healthRoutes);
   app.register(driversRoutes);
   app.register(ordersRoutes);
+  app.register(partnerOrderActionsRoutes);
   app.register(partnersRoutes);
   app.register(paymentsRoutes);
   app.register(webhooksRoutes);
+  app.register(dispatchRoutes);
 
   return app;
 }

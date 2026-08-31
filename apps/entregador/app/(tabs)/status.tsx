@@ -12,18 +12,35 @@ import {
 import * as Location from "expo-location";
 import { useSession } from "../../src/context/session";
 import { supabase } from "../../src/lib/supabase";
-import { submitKyc } from "../../src/lib/backend";
+import { acceptOffer, rejectOffer, submitKyc } from "../../src/lib/backend";
 
 type DriverRow = { status: string; kyc_status: string };
 
+type OfferRow = {
+  id: string;
+  distance_to_pickup_km: number;
+  distance_to_dropoff_km: number;
+  total_distance_km: number;
+  eta_minutes: number;
+  payout_cents: number;
+  deliveries: { partners: { trade_name: string } | null } | null;
+};
+
 const LOCATION_UPDATE_INTERVAL_MS = 20_000;
 const LOCATION_UPDATE_DISTANCE_M = 50;
+const OFFER_POLL_INTERVAL_MS = 5_000;
+
+function formatCents(cents: number): string {
+  return `R$ ${(cents / 100).toFixed(2)}`;
+}
 
 export default function StatusScreen() {
   const { session } = useSession();
   const [driver, setDriver] = useState<DriverRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [offer, setOffer] = useState<OfferRow | null>(null);
+  const [respondingOffer, setRespondingOffer] = useState(false);
 
   const [cpf, setCpf] = useState("");
   const [cnhNumber, setCnhNumber] = useState("");
@@ -53,6 +70,33 @@ export default function StatusScreen() {
       locationSubscription.current?.remove();
     };
   }, []);
+
+  const pollOffer = useCallback(async () => {
+    if (!session) return;
+    const { data } = await supabase
+      .from("delivery_offers")
+      .select(
+        "id, distance_to_pickup_km, distance_to_dropoff_km, total_distance_km, eta_minutes, payout_cents, deliveries(partners(trade_name))",
+      )
+      .eq("driver_id", session.user.id)
+      .eq("status", "OFFERED")
+      .gt("expires_at", new Date().toISOString())
+      .order("offered_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<OfferRow>();
+    setOffer(data);
+  }, [session]);
+
+  useEffect(() => {
+    if (driver?.status !== "ONLINE") {
+      setOffer(null);
+      return;
+    }
+
+    void pollOffer();
+    const interval = setInterval(() => void pollOffer(), OFFER_POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [driver?.status, pollOffer]);
 
   async function startLocationUpdates() {
     if (!session) return;
@@ -107,6 +151,34 @@ export default function StatusScreen() {
       Alert.alert("Localização necessária", (error as Error).message);
     } finally {
       setTogglingStatus(false);
+    }
+  }
+
+  async function handleAcceptOffer() {
+    if (!session || !offer) return;
+    setRespondingOffer(true);
+    try {
+      await acceptOffer(session.access_token, offer.id);
+      setOffer(null);
+      await loadDriver();
+    } catch (error) {
+      Alert.alert("Não foi possível aceitar", (error as Error).message);
+      await pollOffer();
+    } finally {
+      setRespondingOffer(false);
+    }
+  }
+
+  async function handleRejectOffer() {
+    if (!session || !offer) return;
+    setRespondingOffer(true);
+    try {
+      await rejectOffer(session.access_token, offer.id);
+      setOffer(null);
+    } catch (error) {
+      Alert.alert("Não foi possível recusar", (error as Error).message);
+    } finally {
+      setRespondingOffer(false);
     }
   }
 
@@ -185,12 +257,60 @@ export default function StatusScreen() {
     );
   }
 
+  if (driver.status !== "ONLINE" && driver.status !== "OFFLINE") {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Corrida em andamento</Text>
+        <Text style={styles.subtitle}>Status: {driver.status}</Text>
+        <Text style={styles.note}>
+          Acompanhamento de retirada e entrega chega numa próxima fase — por enquanto, siga a
+          corrida combinada com a distribuidora.
+        </Text>
+      </View>
+    );
+  }
+
+  if (offer) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>{offer.deliveries?.partners?.trade_name ?? "Nova corrida"}</Text>
+
+        <View style={styles.offerRow}>
+          <Text style={styles.offerLabel}>Até a retirada</Text>
+          <Text style={styles.offerValue}>{offer.distance_to_pickup_km.toFixed(1)} km</Text>
+        </View>
+        <View style={styles.offerRow}>
+          <Text style={styles.offerLabel}>Entrega</Text>
+          <Text style={styles.offerValue}>{offer.distance_to_dropoff_km.toFixed(1)} km</Text>
+        </View>
+        <View style={styles.offerRow}>
+          <Text style={styles.offerLabel}>Total estimado</Text>
+          <Text style={styles.offerValue}>
+            {offer.total_distance_km.toFixed(1)} km · {offer.eta_minutes} min
+          </Text>
+        </View>
+
+        <View style={styles.payoutBox}>
+          <Text style={styles.payoutLabel}>Você recebe</Text>
+          <Text style={styles.payoutValue}>{formatCents(offer.payout_cents)}</Text>
+        </View>
+
+        <Pressable style={styles.button} onPress={handleAcceptOffer} disabled={respondingOffer}>
+          {respondingOffer ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Aceitar</Text>}
+        </Pressable>
+        <Pressable style={styles.rejectButton} onPress={handleRejectOffer} disabled={respondingOffer}>
+          <Text style={styles.rejectButtonText}>Recusar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Você está {driver.status === "ONLINE" ? "online" : "offline"}</Text>
       <Text style={styles.subtitle}>
         {driver.status === "ONLINE"
-          ? "Recebendo ofertas de corrida perto de você."
+          ? "Procurando corridas perto de você..."
           : "Fique online para começar a receber corridas."}
       </Text>
 
@@ -255,6 +375,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 16,
   },
+  rejectButton: {
+    borderWidth: 1,
+    borderColor: "#c00",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  rejectButtonText: {
+    color: "#c00",
+    fontWeight: "600",
+    fontSize: 16,
+  },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -268,5 +400,36 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 16,
     fontWeight: "600",
+  },
+  offerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  offerLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  offerValue: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  payoutBox: {
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 10,
+    backgroundColor: "#f2f2f2",
+    alignItems: "center",
+  },
+  payoutLabel: {
+    fontSize: 13,
+    color: "#666",
+  },
+  payoutValue: {
+    fontSize: 28,
+    fontWeight: "700",
   },
 });
