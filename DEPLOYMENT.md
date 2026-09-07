@@ -58,10 +58,11 @@ do lançamento real, avaliar se vale separar em dois projetos.
   - `ALLOWED_ORIGINS=https://guelasecodelivery-admin.vercel.app,https://guelasecodelivery-parceiro-gzd6.vercel.app`
     (CORS — sem isso, os painéis web recebem "Failed to fetch" ao chamar a
     API, mesmo autenticados corretamente; apps mobile não precisam disso)
-  - Ainda faltam (Fase 5/6, quando as credenciais reais existirem):
+  - `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY`, `SUMSUB_LEVEL_NAME` — ✅
+    configuradas e testadas de ponta a ponta (ver seção de KYC abaixo)
+  - Ainda faltam (Fase 5, quando as credenciais reais existirem):
     `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
-    `MERCADOPAGO_WEBHOOK_SECRET`, `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY`,
-    `SUMSUB_LEVEL_NAME`
+    `MERCADOPAGO_WEBHOOK_SECRET`
 - Health check: `GET /health` → `{"status":"ok","service":"guela-seco-backend",...}`
 
 ## Painéis web (Vercel)
@@ -140,10 +141,27 @@ página a página:
   — consulta `reviewStatus`/`reviewResult.reviewAnswer` (`GREEN`/`RED`) para
   saber se foi aprovado, rejeitado ou ainda está em análise.
 
-Falta apenas: `SUMSUB_APP_TOKEN` e `SUMSUB_SECRET_KEY` reais (Sumsub
-Dashboard → Developers → App tokens) e `SUMSUB_LEVEL_NAME` (nome do nível de
-verificação criado em Dashboard → Verification levels — não existe um valor
-universal, é específico do workspace do usuário).
+✅ **Testado de ponta a ponta em produção** (Railway + Sumsub sandbox real):
+`POST /drivers/kyc` com CPF/CNH/CNH frente+verso/selfie retornou
+`202 {"status":"PENDING"}`, com o applicant aparecendo no Sumsub Cockpit e o
+registro correspondente gravado em `kyc_checks` no Supabase.
+
+Duas pegadinhas reais encontradas e corrigidas ao testar contra a API real
+(nenhuma delas era óbvia pela documentação em si):
+
+- O erro `400 "Cannot read a metadata object from the body"` do endpoint de
+  upload de documento é enganoso — não é problema de formatação do
+  multipart, é qualquer valor inválido dentro do JSON de `metadata`. No
+  nosso caso: `idDocSubType` deve ser `"FRONT_SIDE"`/`"BACK_SIDE"`, não
+  `"FRONT"`/`"BACK"`.
+- A CNH (`DRIVERS`) é documento de duas faces — se só a frente for enviada,
+  o Sumsub recusa `status/pending` com `"Not all required documents...
+  [IDENTITY]"`. É preciso enviar frente E verso antes de solicitar a
+  checagem (o app do entregador já captura os dois lados, então isso é
+  transparente pro fluxo real — só afetou os testes manuais via curl).
+
+Variáveis `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY` e `SUMSUB_LEVEL_NAME` já
+configuradas no Railway com credenciais de sandbox reais.
 
 ## Política de Privacidade e Termos de Uso
 
@@ -161,9 +179,6 @@ lojas de app e pela LGPD.
 
 Ver relatório completo da Fase 11 na conversa. Resumo:
 - Credenciais Mercado Pago (sandbox → produção)
-- Credenciais reais do Sumsub (App Token, Secret Key e Level Name) — provedor
-  já decidido e integração já implementada, só falta o usuário criar o nível
-  de verificação no Dashboard do Sumsub e colar as chaves
 - Decisão do provedor de saque PIX (hoje é aprovação manual pelo admin)
 - Conta Apple Developer / Google Play Console
 - Política de privacidade + termos de uso (LGPD)
