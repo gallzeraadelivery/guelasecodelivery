@@ -118,6 +118,18 @@ Developer Program (US$99/ano) + Google Play Console (US$25 único). Bundle
 IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
 (`apps/*/app.json`).
 
+## Política de Privacidade e Termos de Uso
+
+Minuta publicada como artifact (não versionada no repositório, é conteúdo
+jurídico e não código): https://claude.ai/code/artifact/6565045a-81ac-423d-9f81-861d8f51da60
+
+Cobre exatamente os dados hoje coletados pelo app (CPF/CNH/selfie do
+entregador, localização, endereços, pagamento via Mercado Pago, CNPJ da
+distribuidora). Tem campos `[A PREENCHER]` (razão social, CNPJ, endereço,
+e-mail de contato, foro) e precisa de revisão jurídica antes de valer como
+documento oficial — necessário para a política de privacidade exigida pelas
+lojas de app e pela LGPD.
+
 ## Pendências externas (não dependem de código)
 
 Ver relatório completo da Fase 11 na conversa. Resumo:
