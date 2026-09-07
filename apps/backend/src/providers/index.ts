@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
-import { CafKycProvider } from "./caf-kyc-provider.js";
 import type { KYCProvider } from "./kyc-provider.js";
+import { SumsubKycProvider } from "./sumsub-kyc-provider.js";
 import { MercadoPagoPaymentProvider } from "./mercadopago-payment-provider.js";
 import type { PaymentProvider } from "./payment-provider.js";
 import type { PayoutProvider } from "./payout-provider.js";
@@ -30,10 +30,18 @@ export function getPaymentProvider(env: Env): PaymentProvider {
 }
 
 export function getKycProvider(env: Env): KYCProvider {
-  if (!env.CAF_API_KEY) {
-    throw new Error("KYC não configurado. Defina CAF_API_KEY para habilitar verificação de entregadores.");
+  if (!env.SUMSUB_APP_TOKEN || !env.SUMSUB_SECRET_KEY || !env.SUMSUB_LEVEL_NAME) {
+    throw new Error(
+      "KYC não configurado. Defina SUMSUB_APP_TOKEN, SUMSUB_SECRET_KEY e SUMSUB_LEVEL_NAME " +
+        "(nome do nível de verificação criado no Dashboard do Sumsub, em Verification levels) " +
+        "para habilitar verificação de entregadores.",
+    );
   }
-  return new CafKycProvider(env.CAF_API_KEY);
+  return new SumsubKycProvider({
+    appToken: env.SUMSUB_APP_TOKEN,
+    secretKey: env.SUMSUB_SECRET_KEY,
+    levelName: env.SUMSUB_LEVEL_NAME,
+  });
 }
 
 export function getPayoutProvider(_env: Env): PayoutProvider {

@@ -24,7 +24,9 @@ const envSchema = z.object({
   MERCADOPAGO_CLIENT_ID: z.string().min(1).optional(),
   MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
   MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
-  CAF_API_KEY: z.string().min(1).optional(),
+  SUMSUB_APP_TOKEN: z.string().min(1).optional(),
+  SUMSUB_SECRET_KEY: z.string().min(1).optional(),
+  SUMSUB_LEVEL_NAME: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

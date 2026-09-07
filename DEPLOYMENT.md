@@ -58,9 +58,10 @@ do lançamento real, avaliar se vale separar em dois projetos.
   - `ALLOWED_ORIGINS=https://guelasecodelivery-admin.vercel.app,https://guelasecodelivery-parceiro-gzd6.vercel.app`
     (CORS — sem isso, os painéis web recebem "Failed to fetch" ao chamar a
     API, mesmo autenticados corretamente; apps mobile não precisam disso)
-  - Ainda faltam (Fase 5/6/9, quando as credenciais reais existirem):
+  - Ainda faltam (Fase 5/6, quando as credenciais reais existirem):
     `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
-    `MERCADOPAGO_WEBHOOK_SECRET`, `CAF_API_KEY`
+    `MERCADOPAGO_WEBHOOK_SECRET`, `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY`,
+    `SUMSUB_LEVEL_NAME`
 - Health check: `GET /health` → `{"status":"ok","service":"guela-seco-backend",...}`
 
 ## Painéis web (Vercel)
@@ -120,12 +121,29 @@ IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
 
 ## Provedor de KYC (verificação do entregador)
 
-Decidido: **CAF (Combate à Fraude)** — substitui o BitcoinP2P (nunca teve
-documentação confiável, ficou só como scaffolding não-funcional). Mesma
-honestidade de antes: sem documentação técnica real da API do CAF, o
-provider (`caf-kyc-provider.ts`) fica pronto estruturalmente mas lança erro
-claro em vez de inventar uma integração. Falta: doc técnica da API + API key
-de teste do CAF para terminar de verdade.
+Decidido: **Sumsub** — substitui CAF (rebrand "Certta"), que exigia contato
+comercial em vez de autocadastro self-service, e antes disso BitcoinP2P
+(nunca teve documentação confiável). Integração real implementada em
+`sumsub-kyc-provider.ts`, a partir de documentação oficial confirmada
+página a página:
+
+- **Authentication**: assinatura HMAC-SHA256 (`X-App-Access-Sig`) sobre
+  `timestamp + METHOD + URI(com query) + rawBody`, usando a Secret Key;
+  headers `X-App-Token` e `X-App-Access-Ts` (Unix seconds).
+- **Create applicant** (`POST /resources/applicants?levelName=...`) — cria o
+  applicant com `externalUserId` = id do entregador.
+- **Add verification documents** (`POST /resources/applicants/{id}/info/idDoc`,
+  multipart) — envia CNH (frente/verso) e selfie.
+- **Request applicant check** (`POST /resources/applicants/{id}/status/pending`)
+  — coloca o applicant na fila de revisão.
+- **Get applicant review status** (`GET /resources/applicants/{id}/status`)
+  — consulta `reviewStatus`/`reviewResult.reviewAnswer` (`GREEN`/`RED`) para
+  saber se foi aprovado, rejeitado ou ainda está em análise.
+
+Falta apenas: `SUMSUB_APP_TOKEN` e `SUMSUB_SECRET_KEY` reais (Sumsub
+Dashboard → Developers → App tokens) e `SUMSUB_LEVEL_NAME` (nome do nível de
+verificação criado em Dashboard → Verification levels — não existe um valor
+universal, é específico do workspace do usuário).
 
 ## Política de Privacidade e Termos de Uso
 
@@ -143,8 +161,9 @@ lojas de app e pela LGPD.
 
 Ver relatório completo da Fase 11 na conversa. Resumo:
 - Credenciais Mercado Pago (sandbox → produção)
-- Decisão + credenciais do provedor de KYC (BitcoinP2P sem documentação
-  confiável até agora)
+- Credenciais reais do Sumsub (App Token, Secret Key e Level Name) — provedor
+  já decidido e integração já implementada, só falta o usuário criar o nível
+  de verificação no Dashboard do Sumsub e colar as chaves
 - Decisão do provedor de saque PIX (hoje é aprovação manual pelo admin)
 - Conta Apple Developer / Google Play Console
 - Política de privacidade + termos de uso (LGPD)
