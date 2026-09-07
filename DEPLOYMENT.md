@@ -9,8 +9,8 @@ fica neste arquivo** — só nomes de variáveis e onde encontrar o valor.
 |---|---|---|---|
 | Banco de dados | Supabase | ✅ No ar | `https://itzlqcwqcuogadfdmobw.supabase.co` |
 | Backend (API) | Railway | ✅ No ar | `https://guela-secobackend-production.up.railway.app` |
-| Painel Admin | Vercel | ⏳ Em andamento | — |
-| Painel Parceiro | Vercel | ⏳ Em andamento | — |
+| Painel Admin | Vercel | ✅ No ar | `https://guelasecodelivery-admin.vercel.app` |
+| Painel Parceiro | Vercel | ✅ No ar | (confirmar URL) |
 | App Cliente (mobile) | — | ⏳ Não publicado | — |
 | App Entregador (mobile) | — | ⏳ Não publicado | — |
 
@@ -60,15 +60,24 @@ do lançamento real, avaliar se vale separar em dois projetos.
     `MERCADOPAGO_WEBHOOK_SECRET`, `BITCOINP2P_API_KEY`
 - Health check: `GET /health` → `{"status":"ok","service":"guela-seco-backend",...}`
 
-## Painéis web (Vercel) — em andamento
+## Painéis web (Vercel)
 
-Cada app (`apps/admin`, `apps/parceiro`) vira um projeto Vercel separado,
-com **Root Directory** apontando pra sua pasta. Variáveis de ambiente
-(iguais nos dois, valores públicos — seguros pra expor no client):
+Cada app (`apps/admin`, `apps/parceiro`) é um projeto Vercel separado, com
+**Root Directory** apontando pra sua pasta e **Framework Preset = Next.js**
+(precisa ser setado manualmente — o Vercel às vezes detecta como "Other" em
+projetos de monorepo, o que causa 404 em todas as rotas). Variáveis de
+ambiente (iguais nos dois, valores públicos — seguros pra expor no client):
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `NEXT_PUBLIC_BACKEND_URL` = `https://guela-secobackend-production.up.railway.app`
+
+⚠️ Ao importar o projeto, o Vercel escaneia o monorepo inteiro e sugere
+variáveis "detectadas" de outros apps (inclusive potencialmente segredos do
+backend). Sempre apagar as detectadas e adicionar manualmente só as 3 acima.
+
+Login do admin: só via conta criada manualmente no Supabase (Authentication
+→ Users) + promovida a `role = 'admin'` — sem autocadastro.
 
 ## Apps mobile (Cliente / Entregador) — pendente
 
