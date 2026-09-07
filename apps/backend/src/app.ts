@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Env } from "./env.js";
 import { driversRoutes } from "./modules/drivers/drivers.routes.js";
@@ -26,6 +27,13 @@ export function buildApp(env: Env): FastifyInstance {
   });
 
   app.decorate("config", env);
+
+  // Apps mobile (Expo) não enviam Origin — não são afetados por CORS. Só
+  // navegadores (admin/parceiro) precisam da origem liberada explicitamente.
+  const allowedOrigins = env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [];
+  app.register(cors, {
+    origin: allowedOrigins,
+  });
 
   app.register(healthRoutes);
   app.register(driversRoutes);

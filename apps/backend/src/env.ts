@@ -16,6 +16,11 @@ const envSchema = z.object({
   // configurada com credenciais reais; sem ela, as rotas de pagamento retornam erro
   // claro em vez de derrubar o boot do servidor.
   BACKEND_PUBLIC_URL: z.string().url().optional(),
+  // Origens de navegador autorizadas a chamar esta API (CORS) — lista separada por
+  // vírgula (ex.: https://admin.guelaseco.com.br,https://parceiro.guelaseco.com.br).
+  // Apps mobile (Expo) não enviam Origin e não são afetados por CORS. Sem esta
+  // variável, nenhuma origem de navegador é liberada.
+  ALLOWED_ORIGINS: z.string().optional(),
   MERCADOPAGO_CLIENT_ID: z.string().min(1).optional(),
   MERCADOPAGO_CLIENT_SECRET: z.string().min(1).optional(),
   MERCADOPAGO_WEBHOOK_SECRET: z.string().min(1).optional(),
