@@ -82,6 +82,9 @@ backend). Sempre apagar as detectadas e adicionar manualmente só as 3 acima.
 Login do admin: só via conta criada manualmente no Supabase (Authentication
 → Users) + promovida a `role = 'admin'` — sem autocadastro.
 
+✅ Testado de ponta a ponta: login no admin + página Financeiro carregando
+dados reais do backend/Supabase (zerados, como esperado sem pedidos ainda).
+
 ## Apps mobile (Cliente / Entregador) — pendente
 
 Ainda sem build/publicação. Plano:
