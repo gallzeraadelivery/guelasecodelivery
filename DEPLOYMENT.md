@@ -55,6 +55,9 @@ do lançamento real, avaliar se vale separar em dois projetos.
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `BACKEND_PUBLIC_URL` (a própria URL pública do serviço, gerada em
     Settings → Networking → Generate Domain)
+  - `ALLOWED_ORIGINS=https://guelasecodelivery-admin.vercel.app,https://guelasecodelivery-parceiro-gzd6.vercel.app`
+    (CORS — sem isso, os painéis web recebem "Failed to fetch" ao chamar a
+    API, mesmo autenticados corretamente; apps mobile não precisam disso)
   - Ainda faltam (Fase 5/6/9, quando as credenciais reais existirem):
     `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
     `MERCADOPAGO_WEBHOOK_SECRET`, `BITCOINP2P_API_KEY`
