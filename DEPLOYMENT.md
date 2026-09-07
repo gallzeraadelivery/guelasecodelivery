@@ -85,6 +85,10 @@ Login do admin: só via conta criada manualmente no Supabase (Authentication
 ✅ Testado de ponta a ponta: login no admin + página Financeiro carregando
 dados reais do backend/Supabase (zerados, como esperado sem pedidos ainda).
 
+✅ Painel parceiro também testado: conta de teste vinculada como `owner` da
+"Distribuidora Demo" (ver seed abaixo), catálogo/preço/estoque carregando e
+editável.
+
 ## Apps mobile (Cliente / Entregador) — pendente
 
 Ainda sem build/publicação. Plano:
