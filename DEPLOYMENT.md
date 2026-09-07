@@ -60,7 +60,7 @@ do lançamento real, avaliar se vale separar em dois projetos.
     API, mesmo autenticados corretamente; apps mobile não precisam disso)
   - Ainda faltam (Fase 5/6/9, quando as credenciais reais existirem):
     `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
-    `MERCADOPAGO_WEBHOOK_SECRET`, `BITCOINP2P_API_KEY`
+    `MERCADOPAGO_WEBHOOK_SECRET`, `CAF_API_KEY`
 - Health check: `GET /health` → `{"status":"ok","service":"guela-seco-backend",...}`
 
 ## Painéis web (Vercel)
@@ -117,6 +117,15 @@ Builds assinados de verdade (pra loja) precisam de conta EAS + Apple
 Developer Program (US$99/ano) + Google Play Console (US$25 único). Bundle
 IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
 (`apps/*/app.json`).
+
+## Provedor de KYC (verificação do entregador)
+
+Decidido: **CAF (Combate à Fraude)** — substitui o BitcoinP2P (nunca teve
+documentação confiável, ficou só como scaffolding não-funcional). Mesma
+honestidade de antes: sem documentação técnica real da API do CAF, o
+provider (`caf-kyc-provider.ts`) fica pronto estruturalmente mas lança erro
+claro em vez de inventar uma integração. Falta: doc técnica da API + API key
+de teste do CAF para terminar de verdade.
 
 ## Política de Privacidade e Termos de Uso
 
