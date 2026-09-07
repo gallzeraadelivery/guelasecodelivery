@@ -29,6 +29,15 @@ type SumsubStatusResponse = {
   reviewResult?: SumsubReviewResult;
 };
 
+class SumsubApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 /**
  * Implementação Sumsub do KYCProvider (seção 11/33), escrita a partir da
  * documentação real confirmada nesta conversa: "Authentication" (assinatura
@@ -70,11 +79,18 @@ export class SumsubKycProvider implements KYCProvider {
     const json: unknown = text ? JSON.parse(text) : {};
 
     if (!response.ok) {
-      throw new Error(`Sumsub ${method} ${uriWithQuery} falhou (${response.status}): ${text}`);
+      throw new SumsubApiError(`Sumsub ${method} ${uriWithQuery} falhou (${response.status}): ${text}`, response.status);
     }
     return json;
   }
 
+  /**
+   * Um entregador pode chamar /drivers/kyc mais de uma vez (ex.: reenvio
+   * depois de uma rejeição). Como usamos driverId como externalUserId, a
+   * segunda tentativa faz o Sumsub responder 409 "Applicant ... already
+   * exists" em vez de criar um novo — nesse caso, reaproveitamos o applicant
+   * existente em vez de falhar.
+   */
   private async createApplicant(driverId: string): Promise<string> {
     const query = `?levelName=${encodeURIComponent(this.config.levelName)}`;
     const uri = `/resources/applicants${query}`;
@@ -86,7 +102,26 @@ export class SumsubKycProvider implements KYCProvider {
       }),
     );
 
-    const result = (await this.request("POST", uri, { body, contentType: "application/json" })) as SumsubApplicantResponse;
+    try {
+      const result = (await this.request("POST", uri, { body, contentType: "application/json" })) as SumsubApplicantResponse;
+      return result.id;
+    } catch (error) {
+      if (error instanceof SumsubApiError && error.status === 409) {
+        return this.getApplicantIdByExternalUserId(driverId);
+      }
+      throw error;
+    }
+  }
+
+  // Endpoint não confirmado por documentação colada nesta conversa — inferido
+  // do padrão "-;campo=valor" usado por outros endpoints do Sumsub para
+  // buscar um recurso por uma chave alternativa (visto em "Get applicant
+  // actions": /resources/applicantActions/-;applicantId={id}). Se estiver
+  // errado, vai falhar de forma explícita (erro da API do Sumsub nos logs),
+  // não silenciosamente.
+  private async getApplicantIdByExternalUserId(externalUserId: string): Promise<string> {
+    const uri = `/resources/applicants/-;externalUserId=${encodeURIComponent(externalUserId)}/one`;
+    const result = (await this.request("GET", uri)) as SumsubApplicantResponse;
     return result.id;
   }
 

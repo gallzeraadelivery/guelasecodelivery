@@ -102,6 +102,27 @@ describe("SumsubKycProvider", () => {
     expect(queued.status).toBe("PENDING");
   });
 
+  it("reaproveita o applicant existente quando o Sumsub responde 409 (already exists)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(
+          { code: 409, description: "Applicant with external user id 'driver-1' already exists: applicant-existing" },
+          false,
+          409,
+        ),
+      ) // create applicant -> conflito
+      .mockResolvedValueOnce(jsonResponse({ id: "applicant-existing" })) // busca por externalUserId
+      .mockResolvedValueOnce(jsonResponse({ ok: 1 })) // request check
+      .mockResolvedValueOnce(jsonResponse({ reviewStatus: "pending" })); // fetch status
+
+    const provider = new SumsubKycProvider(config);
+    const result = await provider.submitCheck({ driverId: "driver-1", cpf: "12345678900", cnhNumber: "999", cnhCategory: "AB" });
+
+    expect(result.externalCheckId).toBe("applicant-existing");
+    const lookupUrl = fetchMock.mock.calls[1][0] as string;
+    expect(lookupUrl).toBe("https://api.sumsub.com/resources/applicants/-;externalUserId=driver-1/one");
+  });
+
   it("propaga erro com corpo da resposta quando a API retorna status de erro", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ description: "Invalid token" }, false, 401));
 
