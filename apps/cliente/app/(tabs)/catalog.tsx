@@ -11,6 +11,7 @@ import {
 import { supabase } from "../../src/lib/supabase";
 import { useCart } from "../../src/context/cart";
 import type { CatalogBrowseRow } from "../../src/lib/types";
+import { colors } from "../../src/theme/colors";
 
 type Category = { id: string; name: string };
 
@@ -148,8 +149,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   chipActive: {
-    backgroundColor: "#000",
-    borderColor: "#000",
+    backgroundColor: colors.red,
+    borderColor: colors.red,
   },
   chipText: {
     fontSize: 13,
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 12,

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Link, router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
+import { colors } from "../src/theme/colors";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -76,41 +77,42 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     textAlign: "center",
+    color: colors.red,
   },
   subtitle: {
     fontSize: 14,
-    color: "#666",
+    color: colors.textMuted,
     textAlign: "center",
     marginBottom: 12,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
   },
   error: {
-    color: "#c00",
+    color: colors.error,
     fontSize: 13,
   },
   button: {
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
     marginTop: 8,
   },
   buttonText: {
-    color: "#fff",
+    color: colors.white,
     fontWeight: "600",
     fontSize: 16,
   },
   link: {
     textAlign: "center",
     marginTop: 8,
-    color: "#000",
+    color: colors.red,
     textDecorationLine: "underline",
   },
 });

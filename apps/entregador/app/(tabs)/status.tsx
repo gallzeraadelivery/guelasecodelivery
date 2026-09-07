@@ -20,6 +20,7 @@ import {
   rejectOffer,
   submitKyc,
 } from "../../src/lib/backend";
+import { colors } from "../../src/theme/colors";
 
 type DriverRow = { status: string; kyc_status: string };
 
@@ -463,7 +464,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   button: {
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",

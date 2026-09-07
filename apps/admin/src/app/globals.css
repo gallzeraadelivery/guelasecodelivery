@@ -3,11 +3,20 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Paleta da marca GUELA SECO — extraída da logo oficial. */
+  --brand-red: #e5252a;
+  --brand-red-dark: #a81a1e;
+  --brand-yellow: #ffd400;
+  --brand-yellow-dark: #e6a700;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-red: var(--brand-red);
+  --color-brand-red-dark: var(--brand-red-dark);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-yellow-dark: var(--brand-yellow-dark);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

@@ -32,17 +32,17 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-black">
-      <aside className="w-56 shrink-0 border-r border-zinc-200 p-4 dark:border-zinc-800">
-        <h1 className="mb-6 text-sm font-semibold text-black dark:text-zinc-50">GUELA SECO Admin</h1>
+      <aside className="w-56 shrink-0 bg-brand-red p-4">
+        <h1 className="mb-6 text-sm font-bold tracking-wide text-brand-yellow">GUELA SECO Admin</h1>
         <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded px-3 py-2 text-sm ${
+              className={`rounded px-3 py-2 text-sm font-medium ${
                 pathname === item.href
-                  ? "bg-black text-white dark:bg-white dark:text-black"
-                  : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  ? "bg-brand-yellow text-brand-red-dark"
+                  : "text-white/90 hover:bg-white/10"
               }`}
             >
               {item.label}
@@ -51,7 +51,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         </nav>
         <button
           onClick={handleSignOut}
-          className="mt-8 text-sm text-red-600 hover:underline"
+          className="mt-8 text-sm text-white/80 hover:text-white hover:underline"
         >
           Sair
         </button>

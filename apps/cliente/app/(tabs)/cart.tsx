@@ -5,6 +5,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useCart } from "../../src/context/cart";
 import { supabase } from "../../src/lib/supabase";
 import { BackendError, createCheckout, createOrder } from "../../src/lib/backend";
+import { colors } from "../../src/theme/colors";
 
 function formatCents(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2)}`;
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   checkoutButton: {
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",

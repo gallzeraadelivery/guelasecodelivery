@@ -136,7 +136,7 @@ export default function FinanceiroPage() {
                         <button
                           onClick={() => handleApprove(w.id)}
                           disabled={processingId === w.id}
-                          className="rounded bg-black px-2 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                          className="rounded bg-brand-red px-2 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
                         >
                           Aprovar
                         </button>

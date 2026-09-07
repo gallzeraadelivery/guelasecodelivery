@@ -14,6 +14,7 @@ import { useFocusEffect } from "expo-router";
 import { useSession } from "../../src/context/session";
 import { supabase } from "../../src/lib/supabase";
 import { requestWithdrawal, type PixKeyType } from "../../src/lib/backend";
+import { colors } from "../../src/theme/colors";
 
 type LedgerRow = {
   id: string;
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   button: {
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,
@@ -323,8 +324,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   pixTypeChipActive: {
-    backgroundColor: "#000",
-    borderColor: "#000",
+    backgroundColor: colors.red,
+    borderColor: colors.red,
   },
   pixTypeChipText: {
     fontSize: 13,

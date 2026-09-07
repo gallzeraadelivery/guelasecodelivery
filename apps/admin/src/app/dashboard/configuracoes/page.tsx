@@ -126,7 +126,7 @@ export default function SettingsPage() {
                   <button
                     onClick={() => handleSave(setting.key)}
                     disabled={saving}
-                    className="rounded bg-black px-3 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                    className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
                   >
                     {saving ? "Salvando..." : "Salvar"}
                   </button>

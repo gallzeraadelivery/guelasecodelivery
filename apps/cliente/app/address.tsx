@@ -13,6 +13,7 @@ import {
 import * as Location from "expo-location";
 import { router } from "expo-router";
 import { supabase } from "../src/lib/supabase";
+import { colors } from "../src/theme/colors";
 import { useSession } from "../src/context/session";
 
 export default function AddressScreen() {
@@ -184,7 +185,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButton: {
-    backgroundColor: "#000",
+    backgroundColor: colors.red,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",

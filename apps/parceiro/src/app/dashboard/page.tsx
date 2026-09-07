@@ -247,7 +247,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+            <h1 className="text-xl font-bold text-brand-red">
               {partnerName ?? "Painel Parceiro"}
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Catálogo e estoque</p>
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                           handleOrderAction(order.id, order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready")
                         }
                         disabled={processingOrderId === order.id}
-                        className="rounded bg-black px-3 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                        className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
                       >
                         {processingOrderId === order.id
                           ? "Enviando..."
@@ -380,7 +380,7 @@ export default function DashboardPage() {
                     <button
                       onClick={() => saveRow(row)}
                       disabled={row.saving}
-                      className="rounded bg-black px-3 py-1 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                      className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
                     >
                       {row.saving ? "Salvando..." : "Salvar"}
                     </button>
