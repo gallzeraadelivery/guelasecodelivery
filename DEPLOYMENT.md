@@ -10,7 +10,7 @@ fica neste arquivo** — só nomes de variáveis e onde encontrar o valor.
 | Banco de dados | Supabase | ✅ No ar | `https://itzlqcwqcuogadfdmobw.supabase.co` |
 | Backend (API) | Railway | ✅ No ar | `https://guela-secobackend-production.up.railway.app` |
 | Painel Admin | Vercel | ✅ No ar | `https://guelasecodelivery-admin.vercel.app` |
-| Painel Parceiro | Vercel | ✅ No ar | (confirmar URL) |
+| Painel Parceiro | Vercel | ✅ No ar | `https://guelasecodelivery-parceiro-gzd6.vercel.app` |
 | App Cliente (mobile) | — | ⏳ Não publicado | — |
 | App Entregador (mobile) | — | ⏳ Não publicado | — |
 
