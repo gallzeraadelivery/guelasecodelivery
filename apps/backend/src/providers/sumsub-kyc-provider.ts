@@ -102,8 +102,12 @@ export class SumsubKycProvider implements KYCProvider {
 
     const imageBuffer = Buffer.from(imageBase64, "base64");
     const parts: Buffer[] = [
+      // Sem Content-Type nesta parte de propósito: o exemplo oficial do Sumsub
+      // (curl -F 'metadata={...}') envia o campo sem header de tipo — quando
+      // testamos com "Content-Type: application/json" aqui, a API respondeu
+      // 400 "Cannot read a metadata object from the body".
       Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="metadata"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="metadata"\r\n\r\n${JSON.stringify(metadata)}\r\n`,
       ),
       Buffer.from(
         `--${boundary}\r\nContent-Disposition: form-data; name="content"; filename="document.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
