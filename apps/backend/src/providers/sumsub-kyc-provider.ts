@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac } from "node:crypto";
 import type { KycCheckResult, KycStatus, KycSubmissionInput, KYCProvider } from "./kyc-provider.js";
 
 const SUMSUB_BASE_URL = "https://api.sumsub.com";
@@ -59,7 +59,7 @@ export class SumsubKycProvider implements KYCProvider {
   private async request(
     method: "GET" | "POST",
     uriWithQuery: string,
-    options: { body?: Buffer; contentType?: string } = {},
+    options: { body?: Buffer; contentType?: string; headers?: Record<string, string> } = {},
   ): Promise<unknown> {
     const body = options.body ?? Buffer.alloc(0);
     const { ts, sig } = this.sign(method, uriWithQuery, body);
@@ -71,6 +71,7 @@ export class SumsubKycProvider implements KYCProvider {
         "X-App-Access-Sig": sig,
         "X-App-Access-Ts": ts,
         ...(options.contentType ? { "Content-Type": options.contentType } : {}),
+        ...options.headers,
       },
       body: body.length > 0 ? body : undefined,
     });
@@ -125,36 +126,36 @@ export class SumsubKycProvider implements KYCProvider {
     return result.id;
   }
 
+  /**
+   * Monta o multipart usando FormData/Blob/Request nativos do Node (undici)
+   * em vez de montar os bytes à mão — testado contra a API real do Sumsub e
+   * confirmado correto. `idDocSubType` usa os valores "FRONT_SIDE"/"BACK_SIDE"
+   * (não "FRONT"/"BACK" — testado e confirmado; o valor errado faz a API
+   * responder 400 "Cannot read a metadata object from the body", uma mensagem
+   * enganosa que não indica o campo real com problema).
+   */
   private async uploadDocument(
     applicantId: string,
     idDocType: "DRIVERS" | "SELFIE",
     imageBase64: string,
-    side?: "FRONT" | "BACK",
+    side?: "FRONT_SIDE" | "BACK_SIDE",
   ): Promise<void> {
-    const boundary = `----GuelaSecoSumsub${randomBytes(16).toString("hex")}`;
     const metadata: Record<string, string> = { idDocType, country: "BRA" };
     if (side) metadata.idDocSubType = side;
 
-    const imageBuffer = Buffer.from(imageBase64, "base64");
-    const parts: Buffer[] = [
-      // Sem Content-Type nesta parte de propósito: o exemplo oficial do Sumsub
-      // (curl -F 'metadata={...}') envia o campo sem header de tipo — quando
-      // testamos com "Content-Type: application/json" aqui, a API respondeu
-      // 400 "Cannot read a metadata object from the body".
-      Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="metadata"\r\n\r\n${JSON.stringify(metadata)}\r\n`,
-      ),
-      Buffer.from(
-        `--${boundary}\r\nContent-Disposition: form-data; name="content"; filename="document.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
-      ),
-      imageBuffer,
-      Buffer.from(`\r\n--${boundary}--\r\n`),
-    ];
-    const body = Buffer.concat(parts);
+    const form = new FormData();
+    form.append("metadata", JSON.stringify(metadata));
+    form.append("content", new Blob([Buffer.from(imageBase64, "base64")], { type: "image/jpeg" }), "document.jpg");
 
-    await this.request("POST", `/resources/applicants/${applicantId}/info/idDoc`, {
+    const uri = `/resources/applicants/${applicantId}/info/idDoc`;
+    const probeRequest = new Request(`${SUMSUB_BASE_URL}${uri}`, { method: "POST", body: form });
+    const body = Buffer.from(await probeRequest.arrayBuffer());
+    const contentType = probeRequest.headers.get("content-type") ?? undefined;
+
+    await this.request("POST", uri, {
       body,
-      contentType: `multipart/form-data; boundary=${boundary}`,
+      contentType,
+      headers: { "X-Return-Doc-Warnings": "true" },
     });
   }
 
@@ -184,10 +185,10 @@ export class SumsubKycProvider implements KYCProvider {
     const applicantId = await this.createApplicant(input.driverId);
 
     if (input.documentFrontBase64) {
-      await this.uploadDocument(applicantId, "DRIVERS", input.documentFrontBase64, "FRONT");
+      await this.uploadDocument(applicantId, "DRIVERS", input.documentFrontBase64, "FRONT_SIDE");
     }
     if (input.documentBackBase64) {
-      await this.uploadDocument(applicantId, "DRIVERS", input.documentBackBase64, "BACK");
+      await this.uploadDocument(applicantId, "DRIVERS", input.documentBackBase64, "BACK_SIDE");
     }
     if (input.selfieBase64) {
       await this.uploadDocument(applicantId, "SELFIE", input.selfieBase64);

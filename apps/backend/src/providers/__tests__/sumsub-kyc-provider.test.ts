@@ -67,6 +67,32 @@ describe("SumsubKycProvider", () => {
     expect(requestCheckUrl).toBe("https://api.sumsub.com/resources/applicants/applicant-1/status/pending");
   });
 
+  it("upload de documento usa idDocSubType FRONT_SIDE/BACK_SIDE e envia X-Return-Doc-Warnings", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ id: "applicant-1", review: { reviewStatus: "init" } })) // create applicant
+      .mockResolvedValueOnce(jsonResponse({})) // upload CNH front
+      .mockResolvedValueOnce(jsonResponse({ ok: 1 })) // request check
+      .mockResolvedValueOnce(jsonResponse({ reviewStatus: "pending" })); // fetch status
+
+    const provider = new SumsubKycProvider(config);
+    await provider.submitCheck({
+      driverId: "driver-1",
+      cpf: "12345678900",
+      cnhNumber: "999",
+      cnhCategory: "AB",
+      documentFrontBase64: Buffer.from("cnh-front").toString("base64"),
+    });
+
+    const [, uploadOptions] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const headers = uploadOptions.headers as Record<string, string>;
+    expect(headers["X-Return-Doc-Warnings"]).toBe("true");
+    expect(String(headers["Content-Type"])).toMatch(/^multipart\/form-data; boundary=/);
+
+    const bodyText = Buffer.from(uploadOptions.body as ArrayBuffer).toString("utf8");
+    expect(bodyText).toContain('"idDocSubType":"FRONT_SIDE"');
+    expect(bodyText).not.toContain("FRONT\"");
+  });
+
   it("getCheckStatus mapeia reviewStatus completed + GREEN para APPROVED", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ reviewStatus: "completed", reviewResult: { reviewAnswer: "GREEN" } }),
