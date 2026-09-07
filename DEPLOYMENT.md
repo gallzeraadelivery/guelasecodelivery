@@ -91,13 +91,32 @@ editável.
 
 ## Apps mobile (Cliente / Entregador) — pendente
 
-Ainda sem build/publicação. Plano:
-1. Testar via **Expo Go** (app grátis na loja) apontando pro backend do
-   Railway — não precisa de conta Apple/Google pra isso.
-2. Builds assinados de verdade (pra loja) precisam de conta EAS + Apple
-   Developer Program (US$99/ano) + Google Play Console (US$25 único).
-   Bundle IDs já definidos: `br.com.guelaseco.cliente` e
-   `br.com.guelaseco.entregador` (`apps/*/app.json`).
+Ainda sem build/publicação nem teste em dispositivo real. Tentativa de
+testar via **Expo Go + túnel** (rodando `npx expo start --tunnel` num
+GitHub Codespace, já que o sandbox onde o Claude roda não tem saída de rede
+pro Expo/ngrok): o QR code chegou a aparecer, mas o túnel do ngrok (usado
+por padrão pelo `--tunnel`) se mostrou instável — em uma tentativa o app no
+iPhone deu "There was a problem running the requested project" sem nenhum
+log chegar no Metro (a conexão nunca se estabeleceu de fato), e em outra
+tentativa o próprio `expo start --tunnel` falhou ao subir o túnel
+(`CommandError: Cannot read properties of undefined (reading 'body')` —
+erro conhecido do ngrok anônimo/gratuito, não do nosso código). Pausado por
+decisão consciente — retomar quando houver tempo/paciência para depurar a
+conexão, ou pular direto para a Opção B abaixo.
+
+Plano quando retomar:
+1. **Opção A** — Expo Go + túnel: tentar de novo (`npx expo start --tunnel`
+   em um Codespace), ou trocar de provedor de túnel (o `@expo/ngrok`
+   embutido é antigo/instável; vale tentar `--tunnel` com uma conta ngrok
+   autenticada, ou uma alternativa como Cloudflare Tunnel).
+2. **Opção B** — gerar um `.apk` de teste via EAS Build (mais robusto, não
+   depende de manter um túnel conectado, mas precisa de conta gratuita em
+   expo.dev e ~15 min de build na nuvem deles).
+
+Builds assinados de verdade (pra loja) precisam de conta EAS + Apple
+Developer Program (US$99/ano) + Google Play Console (US$25 único). Bundle
+IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
+(`apps/*/app.json`).
 
 ## Pendências externas (não dependem de código)
 
