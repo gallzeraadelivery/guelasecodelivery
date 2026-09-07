@@ -45,7 +45,7 @@ describe("submitDriverKyc", () => {
     expect(response).toEqual({ status: "APPROVED" });
     expect(captured.payload).toMatchObject({
       driver_id: "driver-1",
-      provider: "bitcoinp2p",
+      provider: "caf",
       external_check_id: "check-abc",
       status: "APPROVED",
       checks: { cpf: true, cnh: true },

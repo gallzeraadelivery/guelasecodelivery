@@ -10,7 +10,7 @@ export async function submitDriverKyc(
 
   const { error } = await db.from("kyc_checks").insert({
     driver_id: input.driverId,
-    provider: "bitcoinp2p",
+    provider: "caf",
     external_check_id: result.externalCheckId,
     status: result.status,
     checks: result.checks,

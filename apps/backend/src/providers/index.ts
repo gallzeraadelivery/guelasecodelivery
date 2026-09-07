@@ -1,5 +1,5 @@
 import type { Env } from "../env.js";
-import { BitcoinP2PKycProvider } from "./bitcoinp2p-kyc-provider.js";
+import { CafKycProvider } from "./caf-kyc-provider.js";
 import type { KYCProvider } from "./kyc-provider.js";
 import { MercadoPagoPaymentProvider } from "./mercadopago-payment-provider.js";
 import type { PaymentProvider } from "./payment-provider.js";
@@ -30,10 +30,10 @@ export function getPaymentProvider(env: Env): PaymentProvider {
 }
 
 export function getKycProvider(env: Env): KYCProvider {
-  if (!env.BITCOINP2P_API_KEY) {
-    throw new Error("KYC não configurado. Defina BITCOINP2P_API_KEY para habilitar verificação de entregadores.");
+  if (!env.CAF_API_KEY) {
+    throw new Error("KYC não configurado. Defina CAF_API_KEY para habilitar verificação de entregadores.");
   }
-  return new BitcoinP2PKycProvider(env.BITCOINP2P_API_KEY);
+  return new CafKycProvider(env.CAF_API_KEY);
 }
 
 export function getPayoutProvider(_env: Env): PayoutProvider {
