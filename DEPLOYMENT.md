@@ -60,9 +60,9 @@ do lançamento real, avaliar se vale separar em dois projetos.
     API, mesmo autenticados corretamente; apps mobile não precisam disso)
   - `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY`, `SUMSUB_LEVEL_NAME` — ✅
     configuradas e testadas de ponta a ponta (ver seção de KYC abaixo)
-  - Ainda faltam (Fase 5, quando as credenciais reais existirem):
-    `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
-    `MERCADOPAGO_WEBHOOK_SECRET`
+  - `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET`,
+    `MERCADOPAGO_WEBHOOK_SECRET` — ✅ configuradas (ver seção de Pagamentos
+    abaixo)
 - Health check: `GET /health` → `{"status":"ok","service":"guela-seco-backend",...}`
 
 ## Painéis web (Vercel)
@@ -163,6 +163,41 @@ Duas pegadinhas reais encontradas e corrigidas ao testar contra a API real
 Variáveis `SUMSUB_APP_TOKEN`, `SUMSUB_SECRET_KEY` e `SUMSUB_LEVEL_NAME` já
 configuradas no Railway com credenciais de sandbox reais.
 
+## Pagamentos (Mercado Pago)
+
+✅ **OAuth Marketplace conectado e testado em produção**: a "Distribuidora
+Demo" foi vinculada com sucesso a uma conta real do Mercado Pago via
+`GET /partners/:id/mercadopago/connect` → autorização no Mercado Pago →
+`GET /partners/mercadopago/callback`. Painel parceiro mostra "Mercado Pago
+conectado".
+
+Onde encontrar as credenciais no painel do Mercado Pago (armadilha real):
+`Client ID` e `Client Secret` **só aparecem na aba "Credenciais de
+produção"** dentro de "Detalhes da aplicação" — não aparecem na aba
+"Credenciais de teste" (lá só tem Public Key/Access Token e dados de
+usuário de teste). Mesmo assim, servem pra testar o fluxo OAuth com contas
+reais — não é preciso ativar pagamentos de produção só pra ver esses dois
+campos.
+
+Também é necessário cadastrar a **URL de redirecionamento** exata na
+aplicação (em "Configuração avançada"):
+`{BACKEND_PUBLIC_URL}/partners/mercadopago/callback` — sem isso, o
+Mercado Pago recusa a autorização com um erro genérico
+("Desculpe, não foi possível conectar o aplicativo à sua conta").
+
+Variáveis `MERCADOPAGO_CLIENT_ID`, `MERCADOPAGO_CLIENT_SECRET` e
+`MERCADOPAGO_WEBHOOK_SECRET` configuradas no Railway. `BACKEND_PUBLIC_URL`
+também precisa estar setada (usada tanto pro redirect_uri do OAuth quanto
+pro CORS/health check) — faltou inicialmente e causava
+`503 "Mercado Pago não configurado"` mesmo com as 3 variáveis do Mercado
+Pago certas.
+
+Ainda falta testar: criar um pedido de verdade e abrir o checkout
+(`createCheckout`), e confirmar que o webhook de pagamento
+(`POST /webhooks/mercadopago`) processa a notificação corretamente — só
+dá pra fazer isso via app mobile ou curl direto, já que o teste do app
+mobile está pausado (ver seção abaixo).
+
 ## Política de Privacidade e Termos de Uso
 
 Minuta publicada como artifact (não versionada no repositório, é conteúdo
@@ -178,7 +213,6 @@ lojas de app e pela LGPD.
 ## Pendências externas (não dependem de código)
 
 Ver relatório completo da Fase 11 na conversa. Resumo:
-- Credenciais Mercado Pago (sandbox → produção)
 - Decisão do provedor de saque PIX (hoje é aprovação manual pelo admin)
 - Conta Apple Developer / Google Play Console
 - Política de privacidade + termos de uso (LGPD)
