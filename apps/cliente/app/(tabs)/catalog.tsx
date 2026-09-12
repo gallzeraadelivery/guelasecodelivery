@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -27,6 +27,20 @@ export default function CatalogScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [rows, setRows] = useState<CatalogBrowseRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addedName, setAddedName] = useState<string | null>(null);
+  const addedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function notifyAdded(name: string) {
+    if (addedTimeout.current) clearTimeout(addedTimeout.current);
+    setAddedName(name);
+    addedTimeout.current = setTimeout(() => setAddedName(null), 1500);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (addedTimeout.current) clearTimeout(addedTimeout.current);
+    };
+  }, []);
 
   useEffect(() => {
     supabase
@@ -104,19 +118,26 @@ export default function CatalogScreen() {
               <Pressable
                 style={[styles.addButton, !item.in_stock && styles.addButtonDisabled]}
                 disabled={!item.in_stock}
-                onPress={() =>
+                onPress={() => {
                   addItem({
                     catalogProductId: item.catalog_product_id,
                     name: item.name,
                     indicativePriceCents: item.min_price_cents,
-                  })
-                }
+                  });
+                  notifyAdded(item.name);
+                }}
               >
                 <Text style={styles.addButtonText}>+</Text>
               </Pressable>
             </View>
           )}
         />
+      )}
+
+      {addedName && (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>✓ {addedName} adicionado ao carrinho</Text>
+        </View>
       )}
     </View>
   );
@@ -217,5 +238,21 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 20,
     lineHeight: 22,
+  },
+  toast: {
+    position: "absolute",
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: "#1a1a1a",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  toastText: {
+    color: "#fff",
+    textAlign: "center",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

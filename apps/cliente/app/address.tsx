@@ -63,7 +63,10 @@ export default function AddressScreen() {
   }
 
   async function handleSave() {
-    if (!session) return;
+    if (!session) {
+      Alert.alert("Faça login", "Você precisa estar logado para salvar um endereço.");
+      return;
+    }
     if (!addressLine.trim()) {
       Alert.alert("Endereço obrigatório", "Informe ao menos a rua/avenida.");
       return;

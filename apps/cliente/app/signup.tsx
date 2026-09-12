@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -22,7 +23,7 @@ export default function SignupScreen() {
     setLoading(true);
     setError(null);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -35,6 +36,16 @@ export default function SignupScreen() {
       setError(signUpError.message);
       return;
     }
+
+    if (!data.session) {
+      Alert.alert(
+        "Confirme seu e-mail",
+        "Enviamos um link de confirmação para o seu e-mail. Confirme e depois faça login.",
+      );
+      router.replace("/login");
+      return;
+    }
+
     router.replace("/(tabs)/catalog");
   }
 
