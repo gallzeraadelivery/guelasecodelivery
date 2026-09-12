@@ -91,34 +91,61 @@ dados reais do backend/Supabase (zerados, como esperado sem pedidos ainda).
 "Distribuidora Demo" (ver seed abaixo), catálogo/preço/estoque carregando e
 editável.
 
-## Apps mobile (Cliente / Entregador) — pendente
+## Apps mobile (Cliente / Entregador)
 
-Ainda sem build/publicação nem teste em dispositivo real. Tentativa de
-testar via **Expo Go + túnel** (rodando `npx expo start --tunnel` num
-GitHub Codespace, já que o sandbox onde o Claude roda não tem saída de rede
-pro Expo/ngrok): o QR code chegou a aparecer, mas o túnel do ngrok (usado
-por padrão pelo `--tunnel`) se mostrou instável — em uma tentativa o app no
-iPhone deu "There was a problem running the requested project" sem nenhum
-log chegar no Metro (a conexão nunca se estabeleceu de fato), e em outra
-tentativa o próprio `expo start --tunnel` falhou ao subir o túnel
-(`CommandError: Cannot read properties of undefined (reading 'body')` —
-erro conhecido do ngrok anônimo/gratuito, não do nosso código). Pausado por
-decisão consciente — retomar quando houver tempo/paciência para depurar a
-conexão, ou pular direto para a Opção B abaixo.
+**App cliente**: build de teste (`.apk`, perfil `preview`) gerado com sucesso
+via **EAS Build acionado pelo GitHub** (dashboard expo.dev, projeto
+`quela-seco-cliente` — sem CLI local, sem Android Studio). Instalado e
+testado num Android real. Duas correções de dependências que travavam o
+build nativo, já commitadas:
+- `apps/cliente/app.json`: slug corrigido pra bater com o nome do projeto
+  registrado no Expo (`quela-seco-cliente`, não `guela-seco-cliente`) +
+  `owner`/`extra.eas.projectId`.
+- `react-native-reanimated` e `react-native-worklets` fixados em `4.5.5` /
+  `0.10.4` (respectivamente) nos dois apps — sem isso o pnpm resolvia
+  `react-native-worklets@0.12.1` (puxado como peer opcional pelo
+  `expo-router`), que já removeu a API síncrona que o `expo-modules-core`
+  57.0.14 deste SDK ainda chama (`WorkletRuntime::executeSync`), quebrando a
+  compilação C++/CMake do Android.
 
-Plano quando retomar:
-1. **Opção A** — Expo Go + túnel: tentar de novo (`npx expo start --tunnel`
-   em um Codespace), ou trocar de provedor de túnel (o `@expo/ngrok`
-   embutido é antigo/instável; vale tentar `--tunnel` com uma conta ngrok
-   autenticada, ou uma alternativa como Cloudflare Tunnel).
-2. **Opção B** — gerar um `.apk` de teste via EAS Build (mais robusto, não
-   depende de manter um túnel conectado, mas precisa de conta gratuita em
-   expo.dev e ~15 min de build na nuvem deles).
+Variáveis de ambiente (`EXPO_PUBLIC_BACKEND_URL`,
+`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`)
+configuradas no ambiente **Preview** do projeto EAS.
+
+**App entregador**: ainda não tem projeto EAS configurado — repetir o mesmo
+processo (novo projeto no expo.dev, conectar GitHub apontando pra
+`apps/entregador`, `app.json` com slug/owner/projectId corretos, variáveis
+de ambiente) quando formos testá-lo.
 
 Builds assinados de verdade (pra loja) precisam de conta EAS + Apple
 Developer Program (US$99/ano) + Google Play Console (US$25 único). Bundle
 IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
 (`apps/*/app.json`).
+
+### Bugs encontrados no teste do APK (cliente) — 12/09/2026
+
+- **Cadastro fingia sessão logada sem confirmação de e-mail** — corrigido
+  (`signup.tsx` agora checa `data.session` e não navega pro catálogo se vier
+  vazio). Isso também causava "endereço não salva" (silencioso) e "checkout
+  diz que não está logado", que eram sintomas da mesma causa.
+- **Catálogo sem feedback ao adicionar item** — corrigido (toast "✓ produto
+  adicionado ao carrinho").
+- **E-mail de confirmação do Supabase não está sendo entregue** — usuário
+  se cadastrou, apareceu o aviso "confirme seu e-mail" (comportamento
+  esperado após o fix acima), mas o e-mail nunca chegou. **Ainda não
+  investigado a fundo** — suspeitas mais prováveis, a checar no painel do
+  Supabase (Authentication → Logs / Emails):
+  - Rate limit do provedor de e-mail padrão do Supabase (muito baixo, tipo
+    poucos e-mails/hora — comum em projetos novos sem SMTP customizado).
+  - E-mail caindo em spam/lixo eletrônico.
+  - SMTP customizado não configurado (Supabase recomenda configurar um
+    provedor próprio — Resend, SendGrid etc. — pra produção real).
+  Solução rápida pra destravar teste agora: desativar "Confirm email" em
+  Authentication → Providers → Email (reversível, só pra ambiente de
+  teste), ou confirmar o usuário manualmente em Authentication → Users.
+  **Pendente decidir e resolver antes de ir para produção com clientes
+  reais** — sem e-mail de confirmação funcionando, ninguém consegue criar
+  conta.
 
 ## Provedor de KYC (verificação do entregador)
 
@@ -216,3 +243,7 @@ Ver relatório completo da Fase 11 na conversa. Resumo:
 - Decisão do provedor de saque PIX (hoje é aprovação manual pelo admin)
 - Conta Apple Developer / Google Play Console
 - Política de privacidade + termos de uso (LGPD)
+- E-mail de confirmação de cadastro não está sendo entregue pelo Supabase
+  (ver seção "Apps mobile" acima) — bloqueia novos cadastros até resolver
+- Revisão completa ("pente fino") do app cliente após os testes manuais em
+  dispositivo real, e depois repetir para o app entregador
