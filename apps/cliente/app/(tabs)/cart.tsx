@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useCart } from "../../src/context/cart";
 import { supabase } from "../../src/lib/supabase";
-import { BackendError, createCheckout, createOrder } from "../../src/lib/backend";
+import { BackendError, createOrder } from "../../src/lib/backend";
 import { colors } from "../../src/theme/colors";
 
 function formatCents(cents: number): string {
@@ -55,29 +54,13 @@ export default function CartScreen() {
 
       clear();
 
-      let checkout;
-      try {
-        checkout = await createCheckout(session.access_token, result.orderId);
-      } catch (checkoutError) {
-        const message =
-          checkoutError instanceof BackendError && checkoutError.status === 409
-            ? checkoutError.message
-            : "Não foi possível iniciar o pagamento agora. Você pode tentar novamente em breve.";
-        Alert.alert(
-          `Pedido criado — ${result.partner.tradeName}`,
-          `Chega em aproximadamente ${result.etaMinutes} min · Total: ${formatCents(result.totalCents)}\n\n${message}`,
-        );
-        return;
-      }
-
-      await WebBrowser.openBrowserAsync(checkout.checkoutUrl);
-      Alert.alert(
-        "Pagamento",
-        "Se você concluiu o pagamento, seu pedido será confirmado em instantes.",
-      );
+      router.push({
+        pathname: "/checkout",
+        params: { orderId: result.orderId },
+      });
     } catch (error) {
       if (error instanceof BackendError && error.status === 422) {
-        Alert.alert("Sem cobertura", error.message);
+        Alert.alert("Não foi possível fazer o pedido", error.message);
       } else {
         Alert.alert("Não foi possível finalizar", "Tente novamente em instantes.");
       }

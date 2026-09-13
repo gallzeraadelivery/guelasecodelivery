@@ -11,7 +11,7 @@ export type CartItem = {
 type CartContextValue = {
   items: CartItem[];
   totalItems: number;
-  addItem: (item: Omit<CartItem, "quantity">) => void;
+  addItem: (item: Omit<CartItem, "quantity">, quantity?: number) => void;
   removeItem: (catalogProductId: string) => void;
   setQuantity: (catalogProductId: string, quantity: number) => void;
   clear: () => void;
@@ -47,15 +47,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     () => ({
       items,
       totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
-      addItem: (item) => {
+      addItem: (item, quantity = 1) => {
         setItems((current) => {
           const existing = current.find((i) => i.catalogProductId === item.catalogProductId);
           if (existing) {
             return current.map((i) =>
-              i.catalogProductId === item.catalogProductId ? { ...i, quantity: i.quantity + 1 } : i,
+              i.catalogProductId === item.catalogProductId
+                ? { ...i, quantity: i.quantity + quantity }
+                : i,
             );
           }
-          return [...current, { ...item, quantity: 1 }];
+          return [...current, { ...item, quantity }];
         });
       },
       removeItem: (catalogProductId) => {

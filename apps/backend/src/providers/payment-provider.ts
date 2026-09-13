@@ -29,6 +29,27 @@ export type CreateCheckoutResult = {
   raw: unknown;
 };
 
+export type CreatePaymentInput = {
+  orderId: string;
+  sellerAccessToken: string;
+  amountCents: number;
+  marketplaceFeeCents: number;
+  description: string;
+  cardToken: string;
+  paymentMethodId: string;
+  installments: number;
+  payerEmail?: string;
+  payerCpf: string;
+  notificationUrl: string;
+};
+
+export type CreatePaymentResult = {
+  externalId: string;
+  status: NormalizedPaymentStatus;
+  statusDetail: string | null;
+  raw: unknown;
+};
+
 export type PaymentDetails = {
   externalId: string;
   externalReference: string | null;
@@ -60,6 +81,7 @@ export interface PaymentProvider {
   getOAuthConnectUrl(state: string): string;
   exchangeOAuthCode(code: string): Promise<OAuthTokens>;
   createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>;
+  createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
   getPaymentDetails(paymentExternalId: string, accessToken: string): Promise<PaymentDetails>;
   /**
    * Token da própria aplicação (client_credentials, sem contexto de um

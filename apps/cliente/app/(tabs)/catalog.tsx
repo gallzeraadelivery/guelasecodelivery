@@ -29,6 +29,15 @@ export default function CatalogScreen() {
   const [loading, setLoading] = useState(true);
   const [addedName, setAddedName] = useState<string | null>(null);
   const addedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingQuantities, setPendingQuantities] = useState<Record<string, number>>({});
+
+  function getPendingQuantity(catalogProductId: string): number {
+    return pendingQuantities[catalogProductId] ?? 1;
+  }
+
+  function setPendingQuantity(catalogProductId: string, quantity: number) {
+    setPendingQuantities((current) => ({ ...current, [catalogProductId]: Math.max(1, quantity) }));
+  }
 
   function notifyAdded(name: string) {
     if (addedTimeout.current) clearTimeout(addedTimeout.current);
@@ -106,31 +115,57 @@ export default function CatalogScreen() {
           keyExtractor={(item) => item.catalog_product_id}
           contentContainerStyle={styles.list}
           ListEmptyComponent={<Text style={styles.empty}>Nenhum produto encontrado.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
-                {item.brand && <Text style={styles.cardBrand}>{item.brand}</Text>}
-                <Text style={item.in_stock ? styles.price : styles.priceUnavailable}>
-                  {item.in_stock ? formatPrice(item.min_price_cents) : "Sem estoque no momento"}
-                </Text>
+          renderItem={({ item }) => {
+            const pendingQuantity = getPendingQuantity(item.catalog_product_id);
+
+            return (
+              <View style={styles.card}>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  {item.brand && <Text style={styles.cardBrand}>{item.brand}</Text>}
+                  <Text style={item.in_stock ? styles.price : styles.priceUnavailable}>
+                    {item.in_stock ? formatPrice(item.min_price_cents) : "Sem estoque no momento"}
+                  </Text>
+                </View>
+                {item.in_stock && (
+                  <View style={styles.cardActions}>
+                    <View style={styles.quantityControls}>
+                      <Pressable
+                        style={styles.quantityButton}
+                        onPress={() => setPendingQuantity(item.catalog_product_id, pendingQuantity - 1)}
+                      >
+                        <Text style={styles.quantityButtonText}>−</Text>
+                      </Pressable>
+                      <Text style={styles.quantity}>{pendingQuantity}</Text>
+                      <Pressable
+                        style={styles.quantityButton}
+                        onPress={() => setPendingQuantity(item.catalog_product_id, pendingQuantity + 1)}
+                      >
+                        <Text style={styles.quantityButtonText}>+</Text>
+                      </Pressable>
+                    </View>
+                    <Pressable
+                      style={styles.addButton}
+                      onPress={() => {
+                        addItem(
+                          {
+                            catalogProductId: item.catalog_product_id,
+                            name: item.name,
+                            indicativePriceCents: item.min_price_cents,
+                          },
+                          pendingQuantity,
+                        );
+                        notifyAdded(item.name);
+                        setPendingQuantity(item.catalog_product_id, 1);
+                      }}
+                    >
+                      <Text style={styles.addButtonText}>Adicionar</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
-              <Pressable
-                style={[styles.addButton, !item.in_stock && styles.addButtonDisabled]}
-                disabled={!item.in_stock}
-                onPress={() => {
-                  addItem({
-                    catalogProductId: item.catalog_product_id,
-                    name: item.name,
-                    indicativePriceCents: item.min_price_cents,
-                  });
-                  notifyAdded(item.name);
-                }}
-              >
-                <Text style={styles.addButtonText}>+</Text>
-              </Pressable>
-            </View>
-          )}
+            );
+          }}
         />
       )}
 
@@ -192,17 +227,19 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   card: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     borderWidth: 1,
     borderColor: "#eee",
     borderRadius: 10,
     padding: 12,
+    gap: 10,
   },
   cardInfo: {
-    flex: 1,
     gap: 2,
+  },
+  cardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   cardTitle: {
     fontSize: 15,
@@ -223,21 +260,37 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     backgroundColor: colors.red,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 12,
-  },
-  addButtonDisabled: {
-    backgroundColor: "#ccc",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   addButtonText: {
     color: "#fff",
-    fontSize: 20,
-    lineHeight: 22,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  quantityControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  quantityButtonText: {
+    fontSize: 16,
+  },
+  quantity: {
+    minWidth: 20,
+    textAlign: "center",
+    fontWeight: "600",
   },
   toast: {
     position: "absolute",

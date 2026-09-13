@@ -135,3 +135,80 @@ describe("MercadoPagoPaymentProvider.getPaymentDetails", () => {
     expect(details.externalReference).toBeNull();
   });
 });
+
+describe("MercadoPagoPaymentProvider.createPayment", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("envia o token do cartão e o application_fee, e mapeia o status aprovado", async () => {
+    const provider = buildProvider();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 777, status: "approved", status_detail: "accredited" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.createPayment({
+      orderId: "order-1",
+      sellerAccessToken: "seller-token",
+      amountCents: 15_000,
+      marketplaceFeeCents: 1_000,
+      description: "Pedido Guela Seco",
+      cardToken: "card-token-abc",
+      paymentMethodId: "visa",
+      installments: 1,
+      payerEmail: "buyer@example.com",
+      payerCpf: "12345678900",
+      notificationUrl: "https://backend.example.com/webhooks/mercadopago",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.mercadopago.com/v1/payments",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer seller-token" }),
+      }),
+    );
+
+    const [, requestInit] = fetchMock.mock.calls[0];
+    const body = JSON.parse(requestInit.body as string);
+    expect(body).toMatchObject({
+      transaction_amount: 150,
+      token: "card-token-abc",
+      installments: 1,
+      payment_method_id: "visa",
+      application_fee: 10,
+      external_reference: "order-1",
+      payer: { email: "buyer@example.com", identification: { type: "CPF", number: "12345678900" } },
+    });
+
+    expect(result).toMatchObject({ externalId: "777", status: "APPROVED", statusDetail: "accredited" });
+  });
+
+  it("lança quando o Mercado Pago recusa a criação do pagamento", async () => {
+    const provider = buildProvider();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ message: "invalid token" }),
+      }),
+    );
+
+    await expect(
+      provider.createPayment({
+        orderId: "order-1",
+        sellerAccessToken: "seller-token",
+        amountCents: 1000,
+        marketplaceFeeCents: 0,
+        description: "Pedido",
+        cardToken: "bad-token",
+        paymentMethodId: "visa",
+        installments: 1,
+        payerCpf: "12345678900",
+        notificationUrl: "https://backend.example.com/webhooks/mercadopago",
+      }),
+    ).rejects.toThrow(/Falha ao criar pagamento/);
+  });
+});

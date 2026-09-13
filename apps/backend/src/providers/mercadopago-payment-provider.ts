@@ -1,7 +1,9 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type {
   CreateCheckoutInput,
   CreateCheckoutResult,
+  CreatePaymentInput,
+  CreatePaymentResult,
   NormalizedPaymentStatus,
   OAuthTokens,
   PaymentDetails,
@@ -125,6 +127,50 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
     return {
       externalId: body.id,
       checkoutUrl: body.init_point,
+      raw: body,
+    };
+  }
+
+  /**
+   * Checkout API (cartão nativo, in-app) — cobra direto com o token gerado
+   * no app a partir de `POST /v1/card_tokens` (public_key da distribuidora,
+   * seção "Cards - Checkout API"). Diferente de `createCheckout`
+   * (Checkout Pro, preferência + página hospedada), aqui não existe redirect
+   * nenhum: a resposta já vem com o status final (approved/rejected/...).
+   */
+  async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    const response = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${input.sellerAccessToken}`,
+        "X-Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({
+        transaction_amount: input.amountCents / 100,
+        token: input.cardToken,
+        description: input.description,
+        installments: input.installments,
+        payment_method_id: input.paymentMethodId,
+        application_fee: input.marketplaceFeeCents / 100,
+        external_reference: input.orderId,
+        notification_url: input.notificationUrl,
+        payer: {
+          email: input.payerEmail,
+          identification: { type: "CPF", number: input.payerCpf },
+        },
+      }),
+    });
+
+    const body = await readJson<{ id: number | string; status: string; status_detail?: string }>(response);
+    if (!response.ok) {
+      throw new Error(`Falha ao criar pagamento no Mercado Pago: ${JSON.stringify(body)}`);
+    }
+
+    return {
+      externalId: String(body.id),
+      status: mapStatus(body.status),
+      statusDetail: body.status_detail ?? null,
       raw: body,
     };
   }

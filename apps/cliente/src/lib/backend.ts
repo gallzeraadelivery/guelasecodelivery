@@ -43,17 +43,51 @@ export async function createOrder(
   return body as CreateOrderResponse;
 }
 
-export async function createCheckout(accessToken: string, orderId: string): Promise<{ checkoutUrl: string }> {
-  const response = await fetch(`${backendUrl}/orders/${orderId}/checkout`, {
-    method: "POST",
+export async function getPaymentKey(accessToken: string, orderId: string): Promise<{ publicKey: string }> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/payment-key`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   const body = await response.json();
 
   if (!response.ok) {
-    throw new BackendError(body.error ?? "Falha ao iniciar pagamento.", response.status);
+    throw new BackendError(body.error ?? "Falha ao preparar pagamento.", response.status);
   }
 
-  return body as { checkoutUrl: string };
+  return body as { publicKey: string };
+}
+
+export type PayOrderInput = {
+  cardToken: string;
+  paymentMethodId: string;
+  installments: number;
+  payerCpf: string;
+};
+
+export type PayOrderResponse = {
+  status: "PENDING" | "APPROVED" | "REJECTED" | "REFUNDED" | "CANCELLED" | "IN_PROCESS";
+  statusDetail: string | null;
+};
+
+export async function payOrder(
+  accessToken: string,
+  orderId: string,
+  input: PayOrderInput,
+): Promise<PayOrderResponse> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/pay`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Não foi possível processar o pagamento.", response.status);
+  }
+
+  return body as PayOrderResponse;
 }

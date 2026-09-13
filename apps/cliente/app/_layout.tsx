@@ -11,6 +11,7 @@ export default function RootLayout() {
           <Stack.Screen name="login" />
           <Stack.Screen name="signup" />
           <Stack.Screen name="address" options={{ headerShown: true, title: "Endereço de entrega" }} />
+          <Stack.Screen name="checkout" options={{ headerShown: true, title: "Pagamento" }} />
           <Stack.Screen name="(tabs)" />
         </Stack>
       </CartProvider>

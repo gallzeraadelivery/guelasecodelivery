@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { getSetting, serviceFeeRuleSchema } from "../../lib/settings.js";
 import { selectFulfillmentPartner } from "../fulfillment/selection.service.js";
-import type { CartItemInput } from "../fulfillment/types.js";
+import type { CartItemInput, EvaluatedCandidate } from "../fulfillment/types.js";
 import { computeServiceFeeCents } from "./pricing.js";
 import { transitionOrder } from "./orders.repository.js";
 import {
@@ -11,6 +11,36 @@ import {
   NoEligiblePartnerError,
   StockConflictError,
 } from "./orders.errors.js";
+
+/**
+ * Traduz o motivo de eliminação num aviso específico pro cliente — a
+ * mensagem genérica "sem cobertura" confundia quando o motivo real era a
+ * distribuidora estar fechada ou sem estoque, não falta de área de entrega.
+ * Só dá um motivo específico quando TODOS os candidatos foram eliminados
+ * pelo mesmo motivo; com motivos mistos ou nenhum candidato na região,
+ * mantém a mensagem genérica.
+ */
+function describeNoEligiblePartner(candidates: EvaluatedCandidate[]): string {
+  if (candidates.length === 0) {
+    return "Nenhuma distribuidora atende essa região ainda.";
+  }
+
+  const reasons = new Set(candidates.map((c) => c.eliminationReason?.split(":")[0]));
+  if (reasons.size === 1) {
+    const reason = [...reasons][0];
+    if (reason === "partner_closed") {
+      return "A distribuidora mais próxima está fechada no momento. Tente novamente durante o horário de funcionamento.";
+    }
+    if (reason === "partner_offline") {
+      return "A distribuidora mais próxima está temporariamente indisponível.";
+    }
+    if (reason === "missing_product") {
+      return "Um ou mais produtos do carrinho estão sem estoque na distribuidora mais próxima.";
+    }
+  }
+
+  return "Nenhuma distribuidora consegue atender 100% do seu carrinho nesta região agora.";
+}
 
 export type CreateOrderInput = {
   customerId: string;
@@ -92,9 +122,7 @@ export async function createOrder(db: SupabaseClient, input: CreateOrderInput): 
       reason: "no_eligible_partner",
       metadata: { candidates: selection.candidates.length },
     });
-    throw new NoEligiblePartnerError(
-      "Nenhuma distribuidora consegue atender 100% do seu carrinho nesta região agora.",
-    );
+    throw new NoEligiblePartnerError(describeNoEligiblePartner(selection.candidates));
   }
 
   const winner = selection.winner;
