@@ -18,15 +18,48 @@ Este projeto Supabase é usado tanto para desenvolvimento/teste quanto para
 produção por enquanto (decisão consciente — ver histórico da conversa). Antes
 do lançamento real, avaliar se vale separar em dois projetos.
 
+## Acesso via CLI (ambiente local do Claude)
+
+Desde 12/09/2026, as CLIs oficiais de cada provedor estão instaladas e
+autenticadas no ambiente local onde o Claude roda, permitindo atualizar cada
+ambiente diretamente (sem depender só de push/CI):
+
+- **Supabase CLI** (`supabase`) — logado via personal access token, projeto
+  linkado (`supabase link --project-ref itzlqcwqcuogadfdmobw`). Usado para
+  aplicar migrations (`supabase db push`) e consultar status
+  (`supabase migration list`).
+- **Railway CLI** (`railway`) — logado, projeto linkado (`extraordinary-unity`
+  → serviço `@guela-seco/backend`). Usado para ver logs/status/redeploy sem
+  precisar entrar no dashboard.
+- **Vercel CLI** (`vercel`) — logado, projetos `apps/admin` e `apps/parceiro`
+  linkados aos projetos corretos (`guelasecodelivery-admin` e
+  `guelasecodelivery-parceiro-gzd6`).
+- **EAS CLI** (`eas`) — logado (conta Expo). `apps/cliente` já linkado ao
+  projeto `quela-seco-cliente`; `apps/entregador` ainda sem projeto EAS (ver
+  seção "Apps mobile" abaixo).
+
+Credenciais (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`) ficam num `.env`
+na raiz do repo, **gitignored**, nunca commitado. As sessões de login do
+Railway/Vercel/EAS ficam salvas nas configs globais dessas CLIs (fora do
+repo). Railway e Vercel já fazem **deploy automático a cada `git push`** na
+branch atual (conectados direto ao GitHub) — a CLI deles aqui é só para
+inspeção/ações manuais, não é necessária para o deploy em si acontecer.
+
 ## Banco de dados (Supabase)
 
 - Projeto: `itzlqcwqcuogadfdmobw`
-- As 21 migrations de `supabase/migrations/` foram aplicadas manualmente via
-  **SQL Editor** do Supabase (em 4 partes, na ordem dos arquivos), porque o
-  ambiente onde o Claude roda não tem saída de rede liberada para
-  `*.supabase.co`. Qualquer migration nova precisa do mesmo processo manual
-  até isso mudar (ou até configurarmos a Supabase CLI/GitHub Action rodando
-  de um ambiente com rede liberada).
+- As 23 migrations de `supabase/migrations/` existentes até 12/09/2026 foram
+  aplicadas manualmente via **SQL Editor** do Supabase, porque, até então, o
+  ambiente onde o Claude rodava não tinha saída de rede liberada para
+  `*.supabase.co`. Isso mudou: a partir de 12/09/2026 esse ambiente já
+  alcança a API do Supabase, e o histórico de migrations foi sincronizado
+  via `supabase migration repair` (marca como aplicadas as 23 já existentes,
+  sem re-executar SQL). A partir de agora, **migrations novas devem ser
+  aplicadas via CLI** (ver seção "Acesso via CLI" abaixo), não mais colando
+  no SQL Editor:
+  ```bash
+  supabase db push -p "$SUPABASE_DB_PASSWORD" --linked
+  ```
 - Dados de demonstração (categorias, 1 distribuidora "Distribuidora Demo",
   4 produtos) foram inseridos via SQL Editor — ver seed original em
   `supabase/seed.sql` (mesmo conteúdo, adaptado pra rodar direto no projeto

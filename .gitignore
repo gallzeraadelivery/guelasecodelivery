@@ -23,6 +23,9 @@ pnpm-debug.log*
 # os
 .DS_Store
 
+# claude code session state
+.claude/
+
 # editors
 .vscode/*
 !.vscode/extensions.json
