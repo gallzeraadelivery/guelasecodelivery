@@ -163,22 +163,21 @@ IDs já definidos: `br.com.guelaseco.cliente` e `br.com.guelaseco.entregador`
   diz que não está logado", que eram sintomas da mesma causa.
 - **Catálogo sem feedback ao adicionar item** — corrigido (toast "✓ produto
   adicionado ao carrinho").
-- **E-mail de confirmação do Supabase não está sendo entregue** — usuário
+- **E-mail de confirmação do Supabase não estava sendo entregue** — usuário
   se cadastrou, apareceu o aviso "confirme seu e-mail" (comportamento
-  esperado após o fix acima), mas o e-mail nunca chegou. **Ainda não
-  investigado a fundo** — suspeitas mais prováveis, a checar no painel do
-  Supabase (Authentication → Logs / Emails):
-  - Rate limit do provedor de e-mail padrão do Supabase (muito baixo, tipo
-    poucos e-mails/hora — comum em projetos novos sem SMTP customizado).
-  - E-mail caindo em spam/lixo eletrônico.
-  - SMTP customizado não configurado (Supabase recomenda configurar um
-    provedor próprio — Resend, SendGrid etc. — pra produção real).
-  Solução rápida pra destravar teste agora: desativar "Confirm email" em
-  Authentication → Providers → Email (reversível, só pra ambiente de
-  teste), ou confirmar o usuário manualmente em Authentication → Users.
-  **Pendente decidir e resolver antes de ir para produção com clientes
-  reais** — sem e-mail de confirmação funcionando, ninguém consegue criar
-  conta.
+  esperado após o fix acima), mas o e-mail nunca chegou. Suspeitas prováveis
+  (não confirmadas, não é mais bloqueante — ver decisão abaixo): rate limit
+  do provedor de e-mail padrão do Supabase, e-mail caindo em spam, ou SMTP
+  customizado não configurado (Supabase recomenda um provedor próprio —
+  Resend, SendGrid etc. — pra produção real).
+  **Decisão (12/09/2026): confirmação de e-mail desativada** —
+  `mailer_autoconfirm` setado para `true` via API de Management do Supabase
+  (`PATCH /v1/projects/{ref}/config/auth`), equivalente a desligar "Confirm
+  email" em Authentication → Providers → Email. Cadastro agora retorna
+  sessão ativa na hora, sem depender de e-mail. **Antes de ir para produção
+  com clientes reais**, decidir se isso fica assim (com verificação de
+  e-mail feita por outro meio, ou nenhuma) ou se configura SMTP customizado
+  e reativa a confirmação.
 
 ## Provedor de KYC (verificação do entregador)
 
@@ -276,7 +275,8 @@ Ver relatório completo da Fase 11 na conversa. Resumo:
 - Decisão do provedor de saque PIX (hoje é aprovação manual pelo admin)
 - Conta Apple Developer / Google Play Console
 - Política de privacidade + termos de uso (LGPD)
-- E-mail de confirmação de cadastro não está sendo entregue pelo Supabase
-  (ver seção "Apps mobile" acima) — bloqueia novos cadastros até resolver
+- Decidir se a confirmação de e-mail no cadastro fica desativada
+  permanentemente ou se configuramos SMTP customizado e reativamos (ver
+  seção "Apps mobile" acima) — desativada por ora só para destravar testes
 - Revisão completa ("pente fino") do app cliente após os testes manuais em
   dispositivo real, e depois repetir para o app entregador
