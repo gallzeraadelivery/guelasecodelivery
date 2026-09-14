@@ -194,6 +194,64 @@ export async function createCardPaymentForOrder(
   return { status: payment.status, statusDetail: payment.statusDetail };
 }
 
+export type PixPaymentInput = {
+  payerName: string;
+  payerCpf: string;
+};
+
+/**
+ * Checkout API — Pix. Diferente do cartão, o pagamento nasce PENDING (o
+ * pagador ainda precisa escanear o QR/colar o código no app do banco); quem
+ * fecha o pedido é o webhook quando o Mercado Pago confirmar o pagamento.
+ */
+export async function createPixPaymentForOrder(
+  db: SupabaseClient,
+  provider: PaymentProvider,
+  env: Env,
+  orderId: string,
+  customerId: string,
+  input: PixPaymentInput,
+): Promise<{ status: string; qrCode: string; qrCodeBase64: string; ticketUrl: string | null }> {
+  const { order, account } = await loadPayableOrder(db, orderId, customerId);
+  const payerEmail = await loadPayerEmail(db, customerId);
+  const backendUrl = env.BACKEND_PUBLIC_URL as string;
+
+  const nameParts = input.payerName.trim().split(/\s+/);
+  const firstName = nameParts[0] || "Cliente";
+  const lastName = nameParts.slice(1).join(" ") || firstName;
+
+  const payment = await provider.createPixPayment({
+    orderId,
+    sellerAccessToken: account.access_token,
+    amountCents: order.total_cents ?? 0,
+    marketplaceFeeCents: order.service_fee_cents ?? 0,
+    description: "Pedido Guela Seco",
+    payerEmail,
+    payerFirstName: firstName,
+    payerLastName: lastName,
+    payerCpf: input.payerCpf,
+    notificationUrl: `${backendUrl}/webhooks/mercadopago`,
+  });
+
+  await db.from("payments").insert({
+    order_id: orderId,
+    provider: "mercadopago",
+    external_id: payment.externalId,
+    payment_method: "pix",
+    gross_amount_cents: order.total_cents,
+    marketplace_fee_cents: order.service_fee_cents,
+    status: payment.status,
+    raw_init_response: payment.raw as never,
+  });
+
+  return {
+    status: payment.status,
+    qrCode: payment.qrCode,
+    qrCodeBase64: payment.qrCodeBase64,
+    ticketUrl: payment.ticketUrl,
+  };
+}
+
 /**
  * Processa um evento de webhook já deduplicado (seção 23) — quem chama
  * decide o que fazer com o retorno; nunca lança para status normais

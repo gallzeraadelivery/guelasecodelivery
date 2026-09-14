@@ -5,8 +5,10 @@ import { getPaymentProvider } from "../../providers/index.js";
 import {
   createCardPaymentForOrder,
   createCheckoutForOrder,
+  createPixPaymentForOrder,
   getPublicKeyForOrder,
   type CardPaymentInput,
+  type PixPaymentInput,
 } from "./payments.service.js";
 import { OrderNotPayableError, PartnerNotConnectedError } from "./payments.errors.js";
 
@@ -106,6 +108,45 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       }
       app.log.error(error);
       return reply.code(500).send({ error: "Não foi possível processar o pagamento." });
+    }
+  });
+
+  app.post<{ Params: { id: string }; Body: PixPaymentInput }>("/orders/:id/pay/pix", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return reply.code(401).send({ error: error.message });
+      throw error;
+    }
+
+    const { payerName, payerCpf } = request.body ?? {};
+    if (!payerName || !payerCpf) {
+      return reply.code(400).send({ error: "Dados de pagamento incompletos." });
+    }
+
+    let provider;
+    try {
+      provider = getPaymentProvider(app.config);
+    } catch (error) {
+      return reply.code(503).send({ error: (error as Error).message });
+    }
+
+    try {
+      const result = await createPixPaymentForOrder(db, provider, app.config, request.params.id, userId, {
+        payerName,
+        payerCpf,
+      });
+      return reply.send(result);
+    } catch (error) {
+      if (error instanceof OrderNotPayableError) {
+        return reply.code(422).send({ error: error.message });
+      }
+      if (error instanceof PartnerNotConnectedError) {
+        return reply.code(409).send({ error: error.message });
+      }
+      app.log.error(error);
+      return reply.code(500).send({ error: "Não foi possível gerar o Pix." });
     }
   });
 }

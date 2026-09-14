@@ -212,3 +212,76 @@ describe("MercadoPagoPaymentProvider.createPayment", () => {
     ).rejects.toThrow(/Falha ao criar pagamento/);
   });
 });
+
+describe("MercadoPagoPaymentProvider.createPixPayment", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("envia payment_method_id pix e devolve o qr code", async () => {
+    const provider = buildProvider();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          id: 888,
+          status: "pending",
+          point_of_interaction: {
+            transaction_data: {
+              qr_code: "00020126...copia-e-cola",
+              qr_code_base64: "iVBORw0KGgo=",
+              ticket_url: "https://mercadopago.com/ticket",
+            },
+          },
+        }),
+      }),
+    );
+
+    const result = await provider.createPixPayment({
+      orderId: "order-1",
+      sellerAccessToken: "seller-token",
+      amountCents: 5000,
+      marketplaceFeeCents: 500,
+      description: "Pedido Guela Seco",
+      payerEmail: "buyer@example.com",
+      payerFirstName: "João",
+      payerLastName: "Silva",
+      payerCpf: "12345678900",
+      notificationUrl: "https://backend.example.com/webhooks/mercadopago",
+    });
+
+    expect(result).toMatchObject({
+      externalId: "888",
+      status: "PENDING",
+      qrCode: "00020126...copia-e-cola",
+      qrCodeBase64: "iVBORw0KGgo=",
+      ticketUrl: "https://mercadopago.com/ticket",
+    });
+  });
+
+  it("lança quando o Mercado Pago não retorna QR code", async () => {
+    const provider = buildProvider();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ id: 1, status: "pending" }),
+      }),
+    );
+
+    await expect(
+      provider.createPixPayment({
+        orderId: "order-1",
+        sellerAccessToken: "seller-token",
+        amountCents: 1000,
+        marketplaceFeeCents: 0,
+        description: "Pedido",
+        payerFirstName: "João",
+        payerLastName: "Silva",
+        payerCpf: "12345678900",
+        notificationUrl: "https://backend.example.com/webhooks/mercadopago",
+      }),
+    ).rejects.toThrow(/não retornou QR code/);
+  });
+});

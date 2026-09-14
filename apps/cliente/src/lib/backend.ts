@@ -91,3 +91,38 @@ export async function payOrder(
 
   return body as PayOrderResponse;
 }
+
+export type PayOrderPixInput = {
+  payerName: string;
+  payerCpf: string;
+};
+
+export type PayOrderPixResponse = {
+  status: "PENDING" | "APPROVED" | "REJECTED" | "REFUNDED" | "CANCELLED" | "IN_PROCESS";
+  qrCode: string;
+  qrCodeBase64: string;
+  ticketUrl: string | null;
+};
+
+export async function payOrderPix(
+  accessToken: string,
+  orderId: string,
+  input: PayOrderPixInput,
+): Promise<PayOrderPixResponse> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/pay/pix`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(input),
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Não foi possível gerar o Pix.", response.status);
+  }
+
+  return body as PayOrderPixResponse;
+}

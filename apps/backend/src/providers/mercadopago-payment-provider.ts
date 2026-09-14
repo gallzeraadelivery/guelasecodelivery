@@ -4,6 +4,8 @@ import type {
   CreateCheckoutResult,
   CreatePaymentInput,
   CreatePaymentResult,
+  CreatePixPaymentInput,
+  CreatePixPaymentResult,
   NormalizedPaymentStatus,
   OAuthTokens,
   PaymentDetails,
@@ -171,6 +173,62 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
       externalId: String(body.id),
       status: mapStatus(body.status),
       statusDetail: body.status_detail ?? null,
+      raw: body,
+    };
+  }
+
+  /**
+   * Pix via Checkout API — mesmo endpoint `/v1/payments`, mas com
+   * `payment_method_id: "pix"` em vez de token de cartão. A resposta traz o
+   * QR code (copia-e-cola + imagem base64) em `point_of_interaction`; o
+   * status só fecha quando o pagador realmente pagar (webhook confirma).
+   */
+  async createPixPayment(input: CreatePixPaymentInput): Promise<CreatePixPaymentResult> {
+    const response = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${input.sellerAccessToken}`,
+        "X-Idempotency-Key": randomUUID(),
+      },
+      body: JSON.stringify({
+        transaction_amount: input.amountCents / 100,
+        description: input.description,
+        payment_method_id: "pix",
+        application_fee: input.marketplaceFeeCents / 100,
+        external_reference: input.orderId,
+        notification_url: input.notificationUrl,
+        payer: {
+          email: input.payerEmail,
+          first_name: input.payerFirstName,
+          last_name: input.payerLastName,
+          identification: { type: "CPF", number: input.payerCpf },
+        },
+      }),
+    });
+
+    const body = await readJson<{
+      id: number | string;
+      status: string;
+      point_of_interaction?: {
+        transaction_data?: { qr_code?: string; qr_code_base64?: string; ticket_url?: string };
+      };
+    }>(response);
+    if (!response.ok) {
+      throw new Error(`Falha ao criar pagamento Pix no Mercado Pago: ${JSON.stringify(body)}`);
+    }
+
+    const transactionData = body.point_of_interaction?.transaction_data;
+    if (!transactionData?.qr_code || !transactionData.qr_code_base64) {
+      throw new Error(`Mercado Pago não retornou QR code Pix: ${JSON.stringify(body)}`);
+    }
+
+    return {
+      externalId: String(body.id),
+      status: mapStatus(body.status),
+      qrCode: transactionData.qr_code,
+      qrCodeBase64: transactionData.qr_code_base64,
+      ticketUrl: transactionData.ticket_url ?? null,
       raw: body,
     };
   }

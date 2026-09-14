@@ -50,6 +50,28 @@ export type CreatePaymentResult = {
   raw: unknown;
 };
 
+export type CreatePixPaymentInput = {
+  orderId: string;
+  sellerAccessToken: string;
+  amountCents: number;
+  marketplaceFeeCents: number;
+  description: string;
+  payerEmail?: string;
+  payerFirstName: string;
+  payerLastName: string;
+  payerCpf: string;
+  notificationUrl: string;
+};
+
+export type CreatePixPaymentResult = {
+  externalId: string;
+  status: NormalizedPaymentStatus;
+  qrCode: string;
+  qrCodeBase64: string;
+  ticketUrl: string | null;
+  raw: unknown;
+};
+
 export type PaymentDetails = {
   externalId: string;
   externalReference: string | null;
@@ -82,6 +104,7 @@ export interface PaymentProvider {
   exchangeOAuthCode(code: string): Promise<OAuthTokens>;
   createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>;
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
+  createPixPayment(input: CreatePixPaymentInput): Promise<CreatePixPaymentResult>;
   getPaymentDetails(paymentExternalId: string, accessToken: string): Promise<PaymentDetails>;
   /**
    * Token da própria aplicação (client_credentials, sem contexto de um
