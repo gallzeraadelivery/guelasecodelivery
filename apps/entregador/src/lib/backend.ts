@@ -121,6 +121,22 @@ export async function getDeliveryNavigation(
   return body as { target: "PICKUP" | "DROPOFF"; pickup: NavigationPoint; dropoff: NavigationPoint };
 }
 
+export type DeliveryItem = { id: string; quantity: number; productName: string };
+
+export async function getDeliveryItems(accessToken: string, deliveryId: string): Promise<DeliveryItem[]> {
+  const response = await fetch(`${backendUrl}/deliveries/${deliveryId}/items`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar itens do pedido.", response.status);
+  }
+
+  return (body as { items: DeliveryItem[] }).items;
+}
+
 export async function getSupportContact(accessToken: string): Promise<{ whatsapp: string }> {
   const response = await fetch(`${backendUrl}/support/contact`, {
     headers: { Authorization: `Bearer ${accessToken}` },

@@ -25,7 +25,9 @@ import {
   rejectOffer,
   submitKyc,
   getDeliveryNavigation,
+  getDeliveryItems,
   type NavigationPoint,
+  type DeliveryItem,
 } from "../../src/lib/backend";
 import { colors } from "../../src/theme/colors";
 
@@ -71,6 +73,8 @@ export default function StatusScreen() {
     pickup: NavigationPoint;
     dropoff: NavigationPoint;
   } | null>(null);
+  const [checklistItems, setChecklistItems] = useState<DeliveryItem[]>([]);
+  const [checkedItemIds, setCheckedItemIds] = useState<Set<string>>(new Set());
 
   const [cpf, setCpf] = useState("");
   const [cnhNumber, setCnhNumber] = useState("");
@@ -160,6 +164,32 @@ export default function StatusScreen() {
   function openExternalNavigation(point: NavigationPoint) {
     if (point.lat === null || point.lng === null) return;
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`);
+  }
+
+  useEffect(() => {
+    if (!session || !activeDelivery || activeDelivery.status !== "AT_PICKUP") {
+      setChecklistItems([]);
+      setCheckedItemIds(new Set());
+      return;
+    }
+    getDeliveryItems(session.access_token, activeDelivery.id)
+      .then((items) => {
+        setChecklistItems(items);
+        setCheckedItemIds(new Set());
+      })
+      .catch(() => setChecklistItems([]));
+  }, [session, activeDelivery]);
+
+  function toggleChecklistItem(itemId: string) {
+    setCheckedItemIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
   }
 
   async function startLocationUpdates() {
@@ -435,11 +465,42 @@ export default function StatusScreen() {
             )}
             {activeDelivery.status === "AT_PICKUP" && (
               <>
-                <Text style={styles.subtitle}>Você está na distribuidora. Confira o pedido antes de sair.</Text>
+                <Text style={styles.subtitle}>Você está na distribuidora. Confira cada item antes de sair.</Text>
+
+                {checklistItems.length === 0 ? (
+                  <ActivityIndicator />
+                ) : (
+                  <View style={styles.checklist}>
+                    {checklistItems.map((item) => {
+                      const checked = checkedItemIds.has(item.id);
+                      return (
+                        <Pressable
+                          key={item.id}
+                          style={styles.checklistRow}
+                          onPress={() => toggleChecklistItem(item.id)}
+                        >
+                          <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                            {checked && <Text style={styles.checkboxMark}>✓</Text>}
+                          </View>
+                          <Text style={styles.checklistItemText}>
+                            {item.quantity}x {item.productName}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <Pressable
-                  style={styles.button}
+                  style={[
+                    styles.button,
+                    (checklistItems.length === 0 || checkedItemIds.size < checklistItems.length) &&
+                      styles.buttonDisabled,
+                  ]}
                   onPress={() => handleDeliveryStep(markPickedUp)}
-                  disabled={updatingDelivery}
+                  disabled={
+                    updatingDelivery || checklistItems.length === 0 || checkedItemIds.size < checklistItems.length
+                  }
                 >
                   {updatingDelivery ? (
                     <ActivityIndicator color="#fff" />
@@ -567,6 +628,42 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 16,
+  },
+  checklist: {
+    gap: 4,
+  },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#ccc",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: colors.red,
+    borderColor: colors.red,
+  },
+  checkboxMark: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  checklistItemText: {
+    fontSize: 15,
+    flex: 1,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
   input: {
     borderWidth: 1,

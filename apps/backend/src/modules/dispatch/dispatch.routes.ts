@@ -146,4 +146,43 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       },
     });
   });
+
+  // order_items só tem RLS pra customer/partner — o entregador não enxerga
+  // direto, então este endpoint expõe só nome+quantidade dos itens da
+  // entrega ativa dele, pra conferência na retirada.
+  app.get<{ Params: { id: string } }>("/deliveries/:id/items", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return reply.code(401).send({ error: error.message });
+      throw error;
+    }
+
+    const { data: delivery } = await db
+      .from("deliveries")
+      .select("id, driver_id, order_id")
+      .eq("id", request.params.id)
+      .maybeSingle();
+
+    if (!delivery || delivery.driver_id !== userId) {
+      return reply.code(404).send({ error: "Entrega não encontrada." });
+    }
+
+    const { data: items } = await db
+      .from("order_items")
+      .select("id, quantity, catalog_products(name)")
+      .eq("order_id", delivery.order_id);
+
+    return reply.send({
+      items: (items ?? []).map((item) => {
+        const product = Array.isArray(item.catalog_products) ? item.catalog_products[0] : item.catalog_products;
+        return {
+          id: item.id,
+          quantity: item.quantity,
+          productName: (product as { name: string } | undefined)?.name ?? "Item",
+        };
+      }),
+    });
+  });
 }
