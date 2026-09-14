@@ -34,6 +34,12 @@
         {
           "locationWhenInUsePermission": "O GUELA SECO Entregador usa sua localização para te oferecer corridas próximas e acompanhar a entrega."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#E5252A"
+        }
       ]
     ],
     "extra": {

@@ -4,6 +4,7 @@ import { getSetting, driverPayoutRuleSchema } from "../../lib/settings.js";
 import { estimateEtaMinutes } from "../fulfillment/eta.js";
 import { haversineKm } from "./geo.js";
 import { computeDriverPayoutCents } from "./payout.js";
+import { sendExpoPushNotification } from "../../lib/push.js";
 
 type DeliveryRow = {
   id: string;
@@ -136,6 +137,18 @@ export async function tryOfferNextCandidate(db: SupabaseClient, deliveryId: stri
     event_type: "OFFER_SENT",
     metadata: { driver_id: candidate.driverId, radius_km: radius },
   });
+
+  const { data: driverRow } = await db
+    .from("drivers")
+    .select("push_token")
+    .eq("id", candidate.driverId)
+    .maybeSingle();
+
+  if (driverRow?.push_token) {
+    await sendExpoPushNotification(driverRow.push_token, "Nova corrida disponível", "Toque para ver os detalhes.", {
+      deliveryId,
+    });
+  }
 }
 
 async function findCandidate(

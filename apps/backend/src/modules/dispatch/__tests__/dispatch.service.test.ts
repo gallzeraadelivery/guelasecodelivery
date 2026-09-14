@@ -74,6 +74,15 @@ function fakeDb(config: {
           }),
         };
       }
+      if (table === "drivers") {
+        // push_token sempre null nos testes — sem isso o service não tenta
+        // chamar a Expo Push API (ver sendExpoPushNotification).
+        return {
+          select: () => ({
+            eq: () => thenable({ push_token: null }),
+          }),
+        };
+      }
       throw new Error(`tabela inesperada no teste: ${table}`);
     },
     rpc(name: string, params: Record<string, unknown>) {

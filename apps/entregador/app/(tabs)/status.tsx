@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -10,6 +11,8 @@ import {
   View,
 } from "react-native";
 import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { useSession } from "../../src/context/session";
 import { supabase } from "../../src/lib/supabase";
 import {
@@ -173,6 +176,38 @@ export default function StatusScreen() {
     locationSubscription.current = null;
   }
 
+  /**
+   * Nice-to-have: se falhar (permissão negada, push ainda não configurado
+   * no projeto), não deve impedir o entregador de ficar online — só fica
+   * sem notificação e continua vendo a oferta pelo polling normal.
+   */
+  async function registerPushToken() {
+    if (!session) return;
+    try {
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "default",
+          importance: Notifications.AndroidImportance.HIGH,
+        });
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== "granted") return;
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const pushToken = await Notifications.getExpoPushTokenAsync({ projectId });
+
+      await supabase.from("drivers").update({ push_token: pushToken.data }).eq("id", session.user.id);
+    } catch {
+      // silencioso de propósito — ver comentário acima.
+    }
+  }
+
   async function handleToggleOnline(value: boolean) {
     if (!session || !driver) return;
     setTogglingStatus(true);
@@ -180,6 +215,7 @@ export default function StatusScreen() {
     try {
       if (value) {
         await startLocationUpdates();
+        await registerPushToken();
       } else {
         stopLocationUpdates();
       }
