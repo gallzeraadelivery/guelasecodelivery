@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { getSetting, serviceFeeRuleSchema } from "../../lib/settings.js";
+import { getSetting, serviceFeeRuleSchema, driverPayoutRuleSchema } from "../../lib/settings.js";
 import { selectFulfillmentPartner } from "../fulfillment/selection.service.js";
 import type { CartItemInput, EvaluatedCandidate } from "../fulfillment/types.js";
 import type { PaymentProvider } from "../../providers/payment-provider.js";
 import { computeServiceFeeCents } from "./pricing.js";
+import { computeDriverPayoutCents } from "../dispatch/payout.js";
 import { transitionOrder } from "./orders.repository.js";
 import type { OrderStatus } from "./order-state-machine.js";
 import {
@@ -214,15 +215,25 @@ export async function createOrder(db: SupabaseClient, input: CreateOrderInput): 
 
   const serviceFeeRule = await getSetting(db, "platform_service_fee", serviceFeeRuleSchema);
   const serviceFeeCents = computeServiceFeeCents(subtotalCents, serviceFeeRule);
-  const totalCents = subtotalCents + serviceFeeCents;
+
+  const deliveryFeeRule = await getSetting(db, "customer_delivery_fee_rule", driverPayoutRuleSchema);
+  const deliveryFeeCents = computeDriverPayoutCents(winner.distanceKm, deliveryFeeRule);
+
+  const totalCents = subtotalCents + serviceFeeCents + deliveryFeeCents;
 
   await db
     .from("orders")
     .update({
       subtotal_cents: subtotalCents,
       service_fee_cents: serviceFeeCents,
+      delivery_fee_cents: deliveryFeeCents,
       total_cents: totalCents,
-      pricing_snapshot: { service_fee_rule: serviceFeeRule, algorithm_version: selection.algorithmVersion },
+      pricing_snapshot: {
+        service_fee_rule: serviceFeeRule,
+        delivery_fee_rule: deliveryFeeRule,
+        delivery_distance_km: winner.distanceKm,
+        algorithm_version: selection.algorithmVersion,
+      },
     })
     .eq("id", orderId);
 
