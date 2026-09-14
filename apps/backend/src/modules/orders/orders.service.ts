@@ -5,12 +5,29 @@ import { selectFulfillmentPartner } from "../fulfillment/selection.service.js";
 import type { CartItemInput, EvaluatedCandidate } from "../fulfillment/types.js";
 import { computeServiceFeeCents } from "./pricing.js";
 import { transitionOrder } from "./orders.repository.js";
+import type { OrderStatus } from "./order-state-machine.js";
 import {
   AddressWithoutLocationError,
   EmptyCartError,
   NoEligiblePartnerError,
+  OrderNotCancellableError,
+  OrderNotFoundError,
   StockConflictError,
 } from "./orders.errors.js";
+
+/**
+ * Status em que o cliente ainda pode cancelar direto pelo app — antes da
+ * distribuidora aceitar o pedido. Depois disso (ACCEPTED em diante), o
+ * cancelamento exige contato (distribuidora, depois suporte), já que ela
+ * pode já ter começado o preparo.
+ */
+const CUSTOMER_CANCELLABLE_STATUSES: OrderStatus[] = [
+  "CREATED",
+  "FULFILLMENT_SELECTED",
+  "STOCK_RESERVED",
+  "AWAITING_PAYMENT",
+  "PARTNER_CONFIRMATION",
+];
 
 /**
  * Traduz o motivo de eliminação num aviso específico pro cliente — a
@@ -249,4 +266,122 @@ export async function createOrder(db: SupabaseClient, input: CreateOrderInput): 
     serviceFeeCents,
     totalCents,
   };
+}
+
+export type OrderDetails = {
+  orderId: string;
+  status: string;
+  paymentMethod: string;
+  partner: { tradeName: string; phone: string | null; addressLine: string | null } | null;
+  etaMinutes: number | null;
+  items: { name: string; quantity: number; unitPriceCents: number | null }[];
+  subtotalCents: number | null;
+  serviceFeeCents: number | null;
+  deliveryFeeCents: number | null;
+  totalCents: number | null;
+  createdAt: string;
+  canCancel: boolean;
+};
+
+export async function getOrderDetails(
+  db: SupabaseClient,
+  orderId: string,
+  customerId: string,
+): Promise<OrderDetails> {
+  const { data: order, error } = await db
+    .from("orders")
+    .select(
+      "id, status, payment_method, partner_id, subtotal_cents, service_fee_cents, delivery_fee_cents, total_cents, created_at",
+    )
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  if (error || !order) {
+    throw new OrderNotFoundError("Pedido não encontrado.");
+  }
+
+  let partner: OrderDetails["partner"] = null;
+  if (order.partner_id) {
+    const { data: partnerRow } = await db
+      .from("partners")
+      .select("trade_name, phone, address_line")
+      .eq("id", order.partner_id)
+      .maybeSingle();
+    if (partnerRow) {
+      partner = {
+        tradeName: partnerRow.trade_name,
+        phone: partnerRow.phone,
+        addressLine: partnerRow.address_line,
+      };
+    }
+  }
+
+  const { data: decision } = await db
+    .from("fulfillment_decisions")
+    .select("eta_minutes")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const { data: items } = await db
+    .from("order_items")
+    .select("quantity, unit_price_cents, catalog_products(name)")
+    .eq("order_id", orderId)
+    .returns<{ quantity: number; unit_price_cents: number | null; catalog_products: { name: string } | null }[]>();
+
+  return {
+    orderId: order.id,
+    status: order.status,
+    paymentMethod: order.payment_method,
+    partner,
+    etaMinutes: decision?.eta_minutes ?? null,
+    items: (items ?? []).map((item) => ({
+      name: item.catalog_products?.name ?? "Produto",
+      quantity: item.quantity,
+      unitPriceCents: item.unit_price_cents,
+    })),
+    subtotalCents: order.subtotal_cents,
+    serviceFeeCents: order.service_fee_cents,
+    deliveryFeeCents: order.delivery_fee_cents,
+    totalCents: order.total_cents,
+    createdAt: order.created_at,
+    canCancel: CUSTOMER_CANCELLABLE_STATUSES.includes(order.status as OrderStatus),
+  };
+}
+
+/**
+ * Cancelamento pelo cliente — só liberado antes da distribuidora aceitar
+ * (ver CUSTOMER_CANCELLABLE_STATUSES). Libera a reserva de estoque quando
+ * havia uma. NÃO estorna pagamento online já capturado (cartão/Pix
+ * aprovados) — isso ainda depende de reembolso manual via Mercado Pago,
+ * não implementado; pedidos em dinheiro na entrega não têm esse problema
+ * (nada foi cobrado ainda).
+ */
+export async function cancelOrder(db: SupabaseClient, orderId: string, customerId: string): Promise<void> {
+  const { data: order, error } = await db
+    .from("orders")
+    .select("id, status")
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  if (error || !order) {
+    throw new OrderNotFoundError("Pedido não encontrado.");
+  }
+
+  const status = order.status as OrderStatus;
+  if (!CUSTOMER_CANCELLABLE_STATUSES.includes(status)) {
+    throw new OrderNotCancellableError(
+      "Este pedido já está em preparo e não pode mais ser cancelado por aqui — fale com a distribuidora ou com o suporte.",
+    );
+  }
+
+  await transitionOrder(db, orderId, status, "CANCELLED", {
+    reason: "customer_cancelled",
+    actor: "customer",
+  });
+
+  if (status === "STOCK_RESERVED" || status === "AWAITING_PAYMENT" || status === "PARTNER_CONFIRMATION") {
+    await db.rpc("release_order_stock", { p_order_id: orderId });
+  }
 }

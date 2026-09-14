@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
+import { STATUS_LABELS } from "../../src/lib/orderStatus";
 
 type OrderRow = {
   id: string;
@@ -9,29 +10,6 @@ type OrderRow = {
   total_cents: number | null;
   created_at: string;
   partners: { trade_name: string } | null;
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  CREATED: "Criado",
-  FULFILLMENT_SELECTED: "Selecionando distribuidora",
-  STOCK_RESERVED: "Estoque reservado",
-  AWAITING_PAYMENT: "Aguardando pagamento",
-  PAID: "Pagamento confirmado",
-  PARTNER_CONFIRMATION: "Aguardando confirmação da distribuidora",
-  ACCEPTED: "Distribuidora aceitou",
-  PREPARING: "Em preparo",
-  READY_FOR_PICKUP: "Pronto para retirada",
-  SEARCHING_DRIVER: "Buscando entregador",
-  DRIVER_ASSIGNED: "Entregador a caminho da retirada",
-  DRIVER_TO_PICKUP: "Entregador a caminho da retirada",
-  PICKED_UP: "Pedido retirado",
-  IN_DELIVERY: "A caminho de você",
-  DELIVERED: "Entregue",
-  CANCELLED: "Cancelado",
-  REFUNDED: "Reembolsado",
-  PAYMENT_FAILED: "Pagamento falhou",
-  DISPUTED: "Em disputa",
-  EXPIRED: "Expirado",
 };
 
 function formatCents(cents: number | null): string {
@@ -74,11 +52,11 @@ export default function OrdersScreen() {
       refreshControl={<RefreshControl refreshing={false} onRefresh={loadOrders} />}
       ListEmptyComponent={<Text style={styles.empty}>Você ainda não fez nenhum pedido.</Text>}
       renderItem={({ item }) => (
-        <View style={styles.card}>
+        <Pressable style={styles.card} onPress={() => router.push(`/order/${item.id}`)}>
           <Text style={styles.partnerName}>{item.partners?.trade_name ?? "Guela Seco"}</Text>
           <Text style={styles.status}>{STATUS_LABELS[item.status] ?? item.status}</Text>
           <Text style={styles.total}>{formatCents(item.total_cents)}</Text>
-        </View>
+        </Pressable>
       )}
     />
   );

@@ -129,3 +129,58 @@ export async function payOrderPix(
 
   return body as PayOrderPixResponse;
 }
+
+export type OrderDetails = {
+  orderId: string;
+  status: string;
+  paymentMethod: OrderPaymentMethod;
+  partner: { tradeName: string; phone: string | null; addressLine: string | null } | null;
+  etaMinutes: number | null;
+  items: { name: string; quantity: number; unitPriceCents: number | null }[];
+  subtotalCents: number | null;
+  serviceFeeCents: number | null;
+  deliveryFeeCents: number | null;
+  totalCents: number | null;
+  createdAt: string;
+  canCancel: boolean;
+};
+
+export async function getOrderDetails(accessToken: string, orderId: string): Promise<OrderDetails> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar pedido.", response.status);
+  }
+
+  return body as OrderDetails;
+}
+
+export async function cancelOrder(accessToken: string, orderId: string): Promise<void> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/cancel`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const body = await response.json();
+    throw new BackendError(body.error ?? "Não foi possível cancelar o pedido.", response.status);
+  }
+}
+
+export async function getSupportContact(accessToken: string): Promise<{ whatsapp: string }> {
+  const response = await fetch(`${backendUrl}/support/contact`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar contato de suporte.", response.status);
+  }
+
+  return body as { whatsapp: string };
+}

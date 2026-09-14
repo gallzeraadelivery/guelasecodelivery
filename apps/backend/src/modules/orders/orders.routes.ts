@@ -2,13 +2,18 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUserId, UnauthorizedError } from "../../lib/auth.js";
 import { createServiceClient } from "../../lib/supabase.js";
-import { createOrder } from "./orders.service.js";
+import { cancelOrder, createOrder, getOrderDetails } from "./orders.service.js";
 import {
   AddressWithoutLocationError,
   EmptyCartError,
   NoEligiblePartnerError,
+  OrderNotCancellableError,
+  OrderNotFoundError,
   StockConflictError,
 } from "./orders.errors.js";
+import { getSetting } from "../../lib/settings.js";
+
+const supportContactSchema = z.object({ whatsapp: z.string() });
 
 const createOrderBodySchema = z.object({
   addressId: z.string().uuid(),
@@ -76,23 +81,56 @@ export async function ordersRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
 
-    const { data: order, error } = await db
-      .from("orders")
-      .select(
-        "id, status, partner_id, subtotal_cents, service_fee_cents, delivery_fee_cents, total_cents, created_at",
-      )
-      .eq("id", request.params.id)
-      .eq("customer_id", userId)
-      .maybeSingle();
-
-    if (error) {
+    try {
+      const details = await getOrderDetails(db, request.params.id, userId);
+      return reply.send(details);
+    } catch (error) {
+      if (error instanceof OrderNotFoundError) {
+        return reply.code(404).send({ error: error.message });
+      }
       app.log.error(error);
       return reply.code(500).send({ error: "Falha ao buscar pedido." });
     }
-    if (!order) {
-      return reply.code(404).send({ error: "Pedido não encontrado." });
+  });
+
+  app.post<{ Params: { id: string } }>("/orders/:id/cancel", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({ error: error.message });
+      }
+      throw error;
     }
 
-    return reply.send(order);
+    try {
+      await cancelOrder(db, request.params.id, userId);
+    } catch (error) {
+      if (error instanceof OrderNotFoundError) {
+        return reply.code(404).send({ error: error.message });
+      }
+      if (error instanceof OrderNotCancellableError) {
+        return reply.code(409).send({ error: error.message });
+      }
+      app.log.error(error);
+      return reply.code(500).send({ error: "Falha ao cancelar o pedido." });
+    }
+
+    return reply.send({ status: "CANCELLED" });
+  });
+
+  app.get("/support/contact", async (request, reply) => {
+    try {
+      await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({ error: error.message });
+      }
+      throw error;
+    }
+
+    const contact = await getSetting(db, "support_contact", supportContactSchema);
+    return reply.send(contact);
   });
 }
