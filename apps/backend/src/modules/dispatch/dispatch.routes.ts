@@ -30,6 +30,12 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       if (NOT_FOUND_CODES.some((code) => error.message.includes(code))) {
         return reply.code(404).send({ error: "Não encontrado." });
       }
+      if (error.message.includes("DRIVER_BALANCE_TOO_LOW")) {
+        return reply.code(409).send({
+          error:
+            "Seu saldo está muito negativo pra aceitar entregas com pagamento na entrega. Repasse o que está pendente pra liberar.",
+        });
+      }
       if (CONFLICT_CODES.some((code) => error.message.includes(code))) {
         return reply.code(409).send({ error: "Esta ação não é mais válida para o estado atual." });
       }

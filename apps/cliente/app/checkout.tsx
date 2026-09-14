@@ -46,10 +46,10 @@ function formatExpiry(value: string): string {
 }
 
 export default function CheckoutScreen() {
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
+  const { orderId, method: initialMethod } = useLocalSearchParams<{ orderId: string; method?: string }>();
   const { session } = useSession();
 
-  const [method, setMethod] = useState<PaymentMethod>("card");
+  const [method, setMethod] = useState<PaymentMethod>(initialMethod === "pix" ? "pix" : "card");
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState(true);
   const [submitting, setSubmitting] = useState(false);

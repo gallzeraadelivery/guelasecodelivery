@@ -42,15 +42,18 @@ function describeNoEligiblePartner(candidates: EvaluatedCandidate[]): string {
   return "Nenhuma distribuidora consegue atender 100% do seu carrinho nesta região agora.";
 }
 
+export type OrderPaymentMethod = "ONLINE" | "CASH_ON_DELIVERY";
+
 export type CreateOrderInput = {
   customerId: string;
   addressId: string;
   items: CartItemInput[];
+  paymentMethod: OrderPaymentMethod;
 };
 
 export type CreateOrderResult = {
   orderId: string;
-  status: "AWAITING_PAYMENT";
+  status: "AWAITING_PAYMENT" | "PARTNER_CONFIRMATION";
   partner: { id: string; tradeName: string };
   etaMinutes: number;
   distanceKm: number;
@@ -76,7 +79,12 @@ export async function createOrder(db: SupabaseClient, input: CreateOrderInput): 
 
   const { data: order, error: orderError } = await db
     .from("orders")
-    .insert({ customer_id: input.customerId, address_id: input.addressId, status: "CREATED" })
+    .insert({
+      customer_id: input.customerId,
+      address_id: input.addressId,
+      status: "CREATED",
+      payment_method: input.paymentMethod,
+    })
     .select("id")
     .single();
 
@@ -203,6 +211,33 @@ export async function createOrder(db: SupabaseClient, input: CreateOrderInput): 
   await transitionOrder(db, orderId, "STOCK_RESERVED", "AWAITING_PAYMENT", {
     reason: "awaiting_payment",
   });
+
+  if (input.paymentMethod === "CASH_ON_DELIVERY") {
+    // Sem gateway envolvido — o dinheiro só existe de verdade na entrega
+    // (seção decidida em conversa), mas o pedido já libera pra distribuidora
+    // preparar, igual a um pagamento online aprovado.
+    await transitionOrder(db, orderId, "AWAITING_PAYMENT", "PAID", { reason: "cash_on_delivery" });
+    await db.rpc("confirm_order_stock", { p_order_id: orderId });
+    await transitionOrder(db, orderId, "PAID", "PARTNER_CONFIRMATION", { reason: "awaiting_partner" });
+
+    await db.from("payments").insert({
+      order_id: orderId,
+      provider: "cash_on_delivery",
+      gross_amount_cents: totalCents,
+      status: "PENDING",
+    });
+
+    return {
+      orderId,
+      status: "PARTNER_CONFIRMATION",
+      partner: { id: winner.partnerId, tradeName: winner.tradeName },
+      etaMinutes: winner.etaMinutes as number,
+      distanceKm: winner.distanceKm,
+      subtotalCents,
+      serviceFeeCents,
+      totalCents,
+    };
+  }
 
   return {
     orderId,

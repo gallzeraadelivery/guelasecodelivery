@@ -8,9 +8,12 @@ import {
   getFinancialSummary,
   getSettingHistory,
   listAuditLogs,
+  listPartnerSettlements,
   listSettings,
   listWithdrawals,
+  settlePartnerSettlement,
   SettingNotFoundError,
+  SettlementNotFoundError,
   updateSetting,
 } from "./admin.service.js";
 import { getAntifraudeFlags } from "./antifraude.service.js";
@@ -116,6 +119,27 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       }
 
       return reply.send({ status: "FAILED" });
+    }),
+  );
+
+  app.get<{ Querystring: { status?: string } }>("/admin/partner-settlements", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const settlements = await listPartnerSettlements(db, request.query.status);
+      return reply.send({ settlements });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/admin/partner-settlements/:id/settle", (request, reply) =>
+    withAdmin(request, reply, async (adminId) => {
+      try {
+        await settlePartnerSettlement(db, request.params.id, adminId);
+      } catch (error) {
+        if (error instanceof SettlementNotFoundError) return reply.code(404).send({ error: error.message });
+        app.log.error(error);
+        return reply.code(500).send({ error: "Falha ao marcar repasse como pago." });
+      }
+
+      return reply.send({ status: "SETTLED" });
     }),
   );
 

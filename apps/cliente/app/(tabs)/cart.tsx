@@ -3,8 +3,16 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View }
 import { router } from "expo-router";
 import { useCart } from "../../src/context/cart";
 import { supabase } from "../../src/lib/supabase";
-import { BackendError, createOrder } from "../../src/lib/backend";
+import { BackendError, createOrder, type OrderPaymentMethod } from "../../src/lib/backend";
 import { colors } from "../../src/theme/colors";
+
+type PaymentChoice = "card" | "pix" | "cash";
+
+const PAYMENT_METHOD_BY_CHOICE: Record<PaymentChoice, OrderPaymentMethod> = {
+  card: "ONLINE",
+  pix: "ONLINE",
+  cash: "CASH_ON_DELIVERY",
+};
 
 function formatCents(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2)}`;
@@ -13,6 +21,7 @@ function formatCents(cents: number): string {
 export default function CartScreen() {
   const { items, setQuantity, removeItem, clear } = useCart();
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>("card");
 
   const indicativeTotalCents = items.reduce(
     (sum, item) => sum + (item.indicativePriceCents ?? 0) * item.quantity,
@@ -50,13 +59,27 @@ export default function CartScreen() {
         session.access_token,
         addressId,
         items.map((item) => ({ catalogProductId: item.catalogProductId, quantity: item.quantity })),
+        PAYMENT_METHOD_BY_CHOICE[paymentChoice],
       );
 
       clear();
 
+      if (paymentChoice === "cash") {
+        router.replace("/(tabs)/orders");
+        setTimeout(
+          () =>
+            Alert.alert(
+              "Pedido confirmado!",
+              `Pague ${formatCents(result.totalCents)} em dinheiro ao entregador na entrega.`,
+            ),
+          300,
+        );
+        return;
+      }
+
       router.push({
         pathname: "/checkout",
-        params: { orderId: result.orderId },
+        params: { orderId: result.orderId, method: paymentChoice },
       });
     } catch (error) {
       if (error instanceof BackendError && error.status === 422) {
@@ -116,6 +139,35 @@ export default function CartScreen() {
             <Text style={styles.totalLabel}>Total estimado</Text>
             <Text style={styles.totalValue}>{formatCents(indicativeTotalCents)}</Text>
           </View>
+
+          <Text style={styles.paymentLabel}>Como você quer pagar?</Text>
+          <View style={styles.paymentChoices}>
+            <Pressable
+              style={[styles.paymentChip, paymentChoice === "card" && styles.paymentChipActive]}
+              onPress={() => setPaymentChoice("card")}
+            >
+              <Text style={[styles.paymentChipText, paymentChoice === "card" && styles.paymentChipTextActive]}>
+                Cartão
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.paymentChip, paymentChoice === "pix" && styles.paymentChipActive]}
+              onPress={() => setPaymentChoice("pix")}
+            >
+              <Text style={[styles.paymentChipText, paymentChoice === "pix" && styles.paymentChipTextActive]}>
+                Pix
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.paymentChip, paymentChoice === "cash" && styles.paymentChipActive]}
+              onPress={() => setPaymentChoice("cash")}
+            >
+              <Text style={[styles.paymentChipText, paymentChoice === "cash" && styles.paymentChipTextActive]}>
+                Dinheiro na entrega
+              </Text>
+            </Pressable>
+          </View>
+
           <Pressable style={styles.checkoutButton} onPress={handleCheckout} disabled={placingOrder}>
             {placingOrder ? (
               <ActivityIndicator color="#fff" />
@@ -210,6 +262,35 @@ const styles = StyleSheet.create({
   totalValue: {
     fontSize: 16,
     fontWeight: "700",
+  },
+  paymentLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  paymentChoices: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  paymentChip: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  paymentChipActive: {
+    backgroundColor: colors.red,
+    borderColor: colors.red,
+  },
+  paymentChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  paymentChipTextActive: {
+    color: "#fff",
   },
   checkoutButton: {
     backgroundColor: colors.red,

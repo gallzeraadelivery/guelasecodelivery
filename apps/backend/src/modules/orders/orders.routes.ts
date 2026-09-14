@@ -20,6 +20,7 @@ const createOrderBodySchema = z.object({
       }),
     )
     .min(1),
+  paymentMethod: z.enum(["ONLINE", "CASH_ON_DELIVERY"]).default("ONLINE"),
 });
 
 export async function ordersRoutes(app: FastifyInstance): Promise<void> {
@@ -46,6 +47,7 @@ export async function ordersRoutes(app: FastifyInstance): Promise<void> {
         customerId: userId,
         addressId: parsed.data.addressId,
         items: parsed.data.items,
+        paymentMethod: parsed.data.paymentMethod,
       });
       return reply.code(201).send(result);
     } catch (error) {

@@ -109,6 +109,7 @@ export async function listWithdrawals(db: SupabaseClient, status?: string): Prom
 const AUDIT_ACTIONS = {
   approveWithdrawal: "withdrawal.approve",
   failWithdrawal: "withdrawal.fail",
+  settlePartnerSettlement: "partner_settlement.settle",
 } as const;
 
 async function logAdminAction(
@@ -117,12 +118,13 @@ async function logAdminAction(
   action: string,
   entityId: string,
   metadata: Record<string, unknown>,
+  entityType = "withdrawal",
 ): Promise<void> {
   await db.from("audit_logs").insert({
     actor_id: adminId,
     actor_role: "admin",
     action,
-    entity_type: "withdrawal",
+    entity_type: entityType,
     entity_id: entityId,
     new_value: metadata,
   });
@@ -157,6 +159,67 @@ export async function failWithdrawal(
   if (error) throw new Error(error.message);
 
   await logAdminAction(db, adminId, AUDIT_ACTIONS.failWithdrawal, withdrawalId, { reason });
+}
+
+export type PartnerSettlementRow = {
+  id: string;
+  partner_id: string;
+  order_id: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+  settled_at: string | null;
+  partner_trade_name: string | null;
+};
+
+/**
+ * Valores que distribuidoras têm a receber de pedidos pagos em dinheiro na
+ * entrega (o dinheiro em si já está com o entregador — isto é só o "quanto
+ * devemos repassar pra cada distribuidora"). Acerto feito fora do app
+ * (transferência bancária) e marcado aqui manualmente pelo admin.
+ */
+export async function listPartnerSettlements(
+  db: SupabaseClient,
+  status?: string,
+): Promise<PartnerSettlementRow[]> {
+  let query = db
+    .from("partner_settlements")
+    .select("id, partner_id, order_id, amount_cents, status, created_at, settled_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (status) query = query.eq("status", status);
+
+  const { data: settlements, error } = await query;
+  if (error) throw new Error(`Falha ao listar repasses: ${error.message}`);
+  if (!settlements || settlements.length === 0) return [];
+
+  const partnerIds = [...new Set(settlements.map((s) => s.partner_id))];
+  const { data: partners } = await db.from("partners").select("id, trade_name").in("id", partnerIds);
+  const nameById = new Map((partners ?? []).map((p) => [p.id as string, p.trade_name as string | null]));
+
+  return settlements.map((s) => ({ ...s, partner_trade_name: nameById.get(s.partner_id) ?? null }));
+}
+
+export class SettlementNotFoundError extends Error {}
+
+export async function settlePartnerSettlement(
+  db: SupabaseClient,
+  settlementId: string,
+  adminId: string,
+): Promise<void> {
+  const { data, error } = await db
+    .from("partner_settlements")
+    .update({ status: "SETTLED", settled_at: new Date().toISOString(), settled_by: adminId })
+    .eq("id", settlementId)
+    .eq("status", "PENDING")
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(`Falha ao marcar repasse como pago: ${error.message}`);
+  if (!data) throw new SettlementNotFoundError("Repasse não encontrado ou já marcado como pago.");
+
+  await logAdminAction(db, adminId, AUDIT_ACTIONS.settlePartnerSettlement, settlementId, {}, "partner_settlement");
 }
 
 export type AuditLogRow = {

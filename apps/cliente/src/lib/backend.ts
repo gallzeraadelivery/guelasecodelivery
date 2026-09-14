@@ -20,10 +20,13 @@ export class BackendError extends Error {
   }
 }
 
+export type OrderPaymentMethod = "ONLINE" | "CASH_ON_DELIVERY";
+
 export async function createOrder(
   accessToken: string,
   addressId: string,
   items: { catalogProductId: string; quantity: number }[],
+  paymentMethod: OrderPaymentMethod,
 ): Promise<CreateOrderResponse> {
   const response = await fetch(`${backendUrl}/orders`, {
     method: "POST",
@@ -31,7 +34,7 @@ export async function createOrder(
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({ addressId, items }),
+    body: JSON.stringify({ addressId, items, paymentMethod }),
   });
 
   const body = await response.json();
