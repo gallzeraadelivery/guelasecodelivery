@@ -1,14 +1,9 @@
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSession } from "../../src/context/session";
-import {
-  BackendError,
-  cancelOrder,
-  getOrderDetails,
-  getSupportContact,
-  type OrderDetails,
-} from "../../src/lib/backend";
+import { supabase } from "../../src/lib/supabase";
+import { BackendError, cancelOrder, getOrderDetails, type OrderDetails } from "../../src/lib/backend";
 import { STATUS_LABELS } from "../../src/lib/orderStatus";
 import { colors } from "../../src/theme/colors";
 
@@ -76,13 +71,32 @@ export default function OrderDetailScreen() {
   }
 
   async function handleContactSupport() {
-    if (!session) return;
-    try {
-      const contact = await getSupportContact(session.access_token);
-      openWhatsApp(contact.whatsapp, `Olá, preciso de ajuda com o pedido ${id}.`);
-    } catch {
-      Alert.alert("Não foi possível abrir o suporte", "Tente novamente em instantes.");
+    if (!session || !id) return;
+
+    const { data: existing } = await supabase
+      .from("support_tickets")
+      .select("id")
+      .eq("order_id", id)
+      .eq("status", "OPEN")
+      .maybeSingle();
+
+    if (existing) {
+      router.push(`/support/${existing.id}`);
+      return;
     }
+
+    const { data, error } = await supabase
+      .from("support_tickets")
+      .insert({ customer_id: session.user.id, order_id: id, subject: `Pedido ${id.slice(0, 8)}` })
+      .select("id")
+      .single();
+
+    if (error || !data) {
+      Alert.alert("Não foi possível abrir o chamado", "Tente novamente em instantes.");
+      return;
+    }
+
+    router.push(`/support/${data.id}`);
   }
 
   if (loading || !details) {

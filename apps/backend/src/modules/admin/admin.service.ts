@@ -244,3 +244,85 @@ export async function listAuditLogs(db: SupabaseClient, limit = 100): Promise<Au
   if (error) throw new Error(`Falha ao listar auditoria: ${error.message}`);
   return data ?? [];
 }
+
+export type SupportTicketRow = {
+  id: string;
+  customer_id: string;
+  order_id: string | null;
+  subject: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  customer_name: string | null;
+};
+
+export async function listSupportTickets(db: SupabaseClient, status?: string): Promise<SupportTicketRow[]> {
+  let query = db
+    .from("support_tickets")
+    .select("id, customer_id, order_id, subject, status, created_at, updated_at")
+    .order("updated_at", { ascending: false })
+    .limit(200);
+
+  if (status) query = query.eq("status", status);
+
+  const { data: tickets, error } = await query;
+  if (error) throw new Error(`Falha ao listar chamados: ${error.message}`);
+  if (!tickets || tickets.length === 0) return [];
+
+  const customerIds = [...new Set(tickets.map((t) => t.customer_id))];
+  const { data: profiles } = await db.from("profiles").select("id, full_name").in("id", customerIds);
+  const nameById = new Map((profiles ?? []).map((p) => [p.id as string, p.full_name as string | null]));
+
+  return tickets.map((t) => ({ ...t, customer_name: nameById.get(t.customer_id) ?? null }));
+}
+
+export type SupportMessageRow = {
+  id: string;
+  ticket_id: string;
+  sender_role: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+};
+
+export class SupportTicketNotFoundError extends Error {}
+
+export async function getSupportMessages(db: SupabaseClient, ticketId: string): Promise<SupportMessageRow[]> {
+  const { data, error } = await db
+    .from("support_messages")
+    .select("id, ticket_id, sender_role, sender_id, body, created_at")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(`Falha ao buscar mensagens: ${error.message}`);
+  return data ?? [];
+}
+
+export async function sendSupportMessageAsAdmin(
+  db: SupabaseClient,
+  ticketId: string,
+  adminId: string,
+  body: string,
+): Promise<void> {
+  const { data: ticket } = await db.from("support_tickets").select("id").eq("id", ticketId).maybeSingle();
+  if (!ticket) throw new SupportTicketNotFoundError("Chamado não encontrado.");
+
+  const { error } = await db
+    .from("support_messages")
+    .insert({ ticket_id: ticketId, sender_role: "admin", sender_id: adminId, body });
+  if (error) throw new Error(`Falha ao enviar mensagem: ${error.message}`);
+
+  await db.from("support_tickets").update({ updated_at: new Date().toISOString() }).eq("id", ticketId);
+}
+
+export async function closeSupportTicket(db: SupabaseClient, ticketId: string): Promise<void> {
+  const { data, error } = await db
+    .from("support_tickets")
+    .update({ status: "CLOSED" })
+    .eq("id", ticketId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(`Falha ao fechar chamado: ${error.message}`);
+  if (!data) throw new SupportTicketNotFoundError("Chamado não encontrado.");
+}

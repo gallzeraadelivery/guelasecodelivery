@@ -54,6 +54,10 @@ export default function ProfileScreen() {
         <Text style={styles.addAddressButtonText}>+ Adicionar endereço</Text>
       </Pressable>
 
+      <Pressable style={styles.addAddressButton} onPress={() => router.push("/support")}>
+        <Text style={styles.addAddressButtonText}>Suporte</Text>
+      </Pressable>
+
       <Pressable style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutButtonText}>Sair</Text>
       </Pressable>

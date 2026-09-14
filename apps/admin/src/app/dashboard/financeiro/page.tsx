@@ -7,8 +7,11 @@ import {
   approveWithdrawal,
   failWithdrawal,
   getFinancialSummary,
+  listPartnerSettlements,
   listWithdrawals,
+  settlePartnerSettlement,
   type FinancialSummary,
+  type PartnerSettlement,
   type Withdrawal,
 } from "@/lib/backend";
 
@@ -35,6 +38,7 @@ export default function FinanceiroPage() {
   const { session } = useAdminSession();
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [settlements, setSettlements] = useState<PartnerSettlement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -42,12 +46,14 @@ export default function FinanceiroPage() {
   const load = useCallback(async () => {
     if (!session) return;
     try {
-      const [nextSummary, nextWithdrawals] = await Promise.all([
+      const [nextSummary, nextWithdrawals, nextSettlements] = await Promise.all([
         getFinancialSummary(session.access_token),
         listWithdrawals(session.access_token, "REQUESTED"),
+        listPartnerSettlements(session.access_token, "PENDING"),
       ]);
       setSummary(nextSummary);
       setWithdrawals(nextWithdrawals);
+      setSettlements(nextSettlements);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -81,6 +87,20 @@ export default function FinanceiroPage() {
       await load();
     } catch (err) {
       alert(err instanceof BackendError ? err.message : "Falha ao recusar saque.");
+    } finally {
+      setProcessingId(null);
+    }
+  }
+
+  async function handleSettle(id: string) {
+    if (!session) return;
+    if (!confirm("Confirma que já transferiu esse valor pra distribuidora?")) return;
+    setProcessingId(id);
+    try {
+      await settlePartnerSettlement(session.access_token, id);
+      await load();
+    } catch (err) {
+      alert(err instanceof BackendError ? err.message : "Falha ao marcar repasse como pago.");
     } finally {
       setProcessingId(null);
     }
@@ -148,6 +168,48 @@ export default function FinanceiroPage() {
                           Recusar
                         </button>
                       </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="mb-3 text-base font-semibold text-black dark:text-zinc-50">
+          Repasses pendentes (pedidos pagos em dinheiro na entrega)
+        </h3>
+        {settlements.length === 0 ? (
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Nenhum repasse pendente.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-100 text-left text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+                <tr>
+                  <th className="p-3">Distribuidora</th>
+                  <th className="p-3">Valor</th>
+                  <th className="p-3">Pedido</th>
+                  <th className="p-3">Desde</th>
+                  <th className="p-3">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {settlements.map((s) => (
+                  <tr key={s.id} className="border-t border-zinc-200 dark:border-zinc-800">
+                    <td className="p-3">{s.partner_trade_name ?? s.partner_id}</td>
+                    <td className="p-3 font-medium">{formatCents(s.amount_cents)}</td>
+                    <td className="p-3 font-mono text-xs">{s.order_id.slice(0, 8)}</td>
+                    <td className="p-3 text-xs text-zinc-500">{formatDate(s.created_at)}</td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => handleSettle(s.id)}
+                        disabled={processingId === s.id}
+                        className="rounded bg-brand-red px-2 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
+                      >
+                        Marcar como repassado
+                      </button>
                     </td>
                   </tr>
                 ))}

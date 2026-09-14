@@ -97,6 +97,26 @@ export const approveWithdrawal = (token: string, id: string, externalId?: string
 export const failWithdrawal = (token: string, id: string, reason: string) =>
   adminFetch<{ status: string }>(token, `/admin/withdrawals/${id}/fail`, { method: "POST", body: { reason } });
 
+export type PartnerSettlement = {
+  id: string;
+  partner_id: string;
+  order_id: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+  settled_at: string | null;
+  partner_trade_name: string | null;
+};
+
+export const listPartnerSettlements = (token: string, status?: string) =>
+  adminFetch<{ settlements: PartnerSettlement[] }>(
+    token,
+    `/admin/partner-settlements${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+  ).then((r) => r.settlements);
+
+export const settlePartnerSettlement = (token: string, id: string) =>
+  adminFetch<{ status: string }>(token, `/admin/partner-settlements/${id}/settle`, { method: "POST" });
+
 export type AuditLogEntry = {
   id: string;
   actor_id: string | null;
@@ -120,3 +140,43 @@ export type AntifraudeFlags = {
 
 export const getAntifraudeFlags = (token: string) =>
   adminFetch<AntifraudeFlags>(token, "/admin/antifraude/flags");
+
+export type SupportTicket = {
+  id: string;
+  customer_id: string;
+  order_id: string | null;
+  subject: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  customer_name: string | null;
+};
+
+export const listSupportTickets = (token: string, status?: string) =>
+  adminFetch<{ tickets: SupportTicket[] }>(
+    token,
+    `/admin/support/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+  ).then((r) => r.tickets);
+
+export type SupportMessage = {
+  id: string;
+  ticket_id: string;
+  sender_role: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+};
+
+export const getSupportMessages = (token: string, ticketId: string) =>
+  adminFetch<{ messages: SupportMessage[] }>(token, `/admin/support/tickets/${ticketId}/messages`).then(
+    (r) => r.messages,
+  );
+
+export const sendSupportMessage = (token: string, ticketId: string, body: string) =>
+  adminFetch<{ status: string }>(token, `/admin/support/tickets/${ticketId}/messages`, {
+    method: "POST",
+    body: { body },
+  });
+
+export const closeSupportTicket = (token: string, ticketId: string) =>
+  adminFetch<{ status: string }>(token, `/admin/support/tickets/${ticketId}/close`, { method: "POST" });

@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   { href: "/dashboard/financeiro", label: "Financeiro" },
+  { href: "/dashboard/suporte", label: "Suporte" },
   { href: "/dashboard/configuracoes", label: "Configurações" },
   { href: "/dashboard/auditoria", label: "Auditoria" },
   { href: "/dashboard/antifraude", label: "Antifraude" },

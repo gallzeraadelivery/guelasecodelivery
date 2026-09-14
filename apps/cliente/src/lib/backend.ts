@@ -170,17 +170,3 @@ export async function cancelOrder(accessToken: string, orderId: string): Promise
     throw new BackendError(body.error ?? "Não foi possível cancelar o pedido.", response.status);
   }
 }
-
-export async function getSupportContact(accessToken: string): Promise<{ whatsapp: string }> {
-  const response = await fetch(`${backendUrl}/support/contact`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new BackendError(body.error ?? "Falha ao buscar contato de suporte.", response.status);
-  }
-
-  return body as { whatsapp: string };
-}

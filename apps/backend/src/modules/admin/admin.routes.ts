@@ -4,16 +4,21 @@ import { requireAdminId, UnauthorizedError } from "../../lib/auth.js";
 import { createServiceClient } from "../../lib/supabase.js";
 import {
   approveWithdrawal,
+  closeSupportTicket,
   failWithdrawal,
   getFinancialSummary,
   getSettingHistory,
+  getSupportMessages,
   listAuditLogs,
   listPartnerSettlements,
   listSettings,
+  listSupportTickets,
   listWithdrawals,
+  sendSupportMessageAsAdmin,
   settlePartnerSettlement,
   SettingNotFoundError,
   SettlementNotFoundError,
+  SupportTicketNotFoundError,
   updateSetting,
 } from "./admin.service.js";
 import { getAntifraudeFlags } from "./antifraude.service.js";
@@ -21,6 +26,7 @@ import { getAntifraudeFlags } from "./antifraude.service.js";
 const updateSettingBodySchema = z.object({ value: z.unknown() });
 const approveWithdrawalBodySchema = z.object({ externalId: z.string().optional() });
 const failWithdrawalBodySchema = z.object({ reason: z.string().min(1) });
+const sendSupportMessageBodySchema = z.object({ body: z.string().min(1) });
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   const db = createServiceClient(app.config);
@@ -147,6 +153,53 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     withAdmin(request, reply, async () => {
       const logs = await listAuditLogs(db);
       return reply.send({ logs });
+    }),
+  );
+
+  app.get<{ Querystring: { status?: string } }>("/admin/support/tickets", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const tickets = await listSupportTickets(db, request.query.status);
+      return reply.send({ tickets });
+    }),
+  );
+
+  app.get<{ Params: { id: string } }>("/admin/support/tickets/:id/messages", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const messages = await getSupportMessages(db, request.params.id);
+      return reply.send({ messages });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/admin/support/tickets/:id/messages", (request, reply) =>
+    withAdmin(request, reply, async (adminId) => {
+      const parsed = sendSupportMessageBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "Corpo da requisição inválido.", details: parsed.error.issues });
+      }
+
+      try {
+        await sendSupportMessageAsAdmin(db, request.params.id, adminId, parsed.data.body);
+      } catch (error) {
+        if (error instanceof SupportTicketNotFoundError) return reply.code(404).send({ error: error.message });
+        app.log.error(error);
+        return reply.code(500).send({ error: "Falha ao enviar mensagem." });
+      }
+
+      return reply.send({ status: "SENT" });
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/admin/support/tickets/:id/close", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      try {
+        await closeSupportTicket(db, request.params.id);
+      } catch (error) {
+        if (error instanceof SupportTicketNotFoundError) return reply.code(404).send({ error: error.message });
+        app.log.error(error);
+        return reply.code(500).send({ error: "Falha ao fechar chamado." });
+      }
+
+      return reply.send({ status: "CLOSED" });
     }),
   );
 
