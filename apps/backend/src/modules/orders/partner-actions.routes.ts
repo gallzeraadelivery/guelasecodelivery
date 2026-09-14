@@ -1,8 +1,14 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { requireUserId, UnauthorizedError } from "../../lib/auth.js";
 import { createServiceClient } from "../../lib/supabase.js";
 import { transitionOrder } from "./orders.repository.js";
 import { startDispatchForOrder } from "../dispatch/dispatch.service.js";
+import { getPaymentProvider } from "../../providers/index.js";
+import { OrderNotRejectableError, rejectOrderByPartner } from "./orders.service.js";
+import { OrderNotFoundError } from "./orders.errors.js";
+
+const rejectOrderBodySchema = z.object({ reason: z.string().trim().min(1) });
 
 async function requirePartnerOrder(db: ReturnType<typeof createServiceClient>, orderId: string, userId: string) {
   const { data: order } = await db.from("orders").select("id, partner_id, status").eq("id", orderId).maybeSingle();
@@ -93,5 +99,41 @@ export async function partnerOrderActionsRoutes(app: FastifyInstance): Promise<v
     await transitionOrder(db, order.id, "READY_FOR_PICKUP", "SEARCHING_DRIVER", { actor: "system" });
 
     return reply.send({ status: "SEARCHING_DRIVER" });
+  });
+
+  app.post<{ Params: { id: string } }>("/orders/:id/reject", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return reply.code(401).send({ error: error.message });
+      throw error;
+    }
+
+    const parsed = rejectOrderBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Informe o motivo da recusa/cancelamento." });
+    }
+
+    const order = await requirePartnerOrder(db, request.params.id, userId);
+    if (!order) return reply.code(404).send({ error: "Pedido não encontrado." });
+
+    let provider;
+    try {
+      provider = getPaymentProvider(app.config);
+    } catch {
+      provider = null;
+    }
+
+    try {
+      await rejectOrderByPartner(db, provider, order.id, order.partner_id as string, parsed.data.reason);
+    } catch (error) {
+      if (error instanceof OrderNotFoundError) return reply.code(404).send({ error: error.message });
+      if (error instanceof OrderNotRejectableError) return reply.code(409).send({ error: error.message });
+      app.log.error(error);
+      return reply.code(500).send({ error: "Falha ao recusar/cancelar o pedido." });
+    }
+
+    return reply.send({ status: "CANCELLED" });
   });
 }

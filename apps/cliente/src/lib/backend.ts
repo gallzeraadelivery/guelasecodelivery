@@ -143,6 +143,7 @@ export type OrderDetails = {
   totalCents: number | null;
   createdAt: string;
   canCancel: boolean;
+  cancellationReason: string | null;
 };
 
 export async function getOrderDetails(accessToken: string, orderId: string): Promise<OrderDetails> {

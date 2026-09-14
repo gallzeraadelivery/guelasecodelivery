@@ -77,6 +77,8 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [orders, setOrders] = useState<PartnerOrder[]>([]);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+  const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -356,6 +358,48 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleRejectOrder(orderId: string) {
+    if (!rejectReason.trim()) {
+      setError("Informe o motivo da recusa/cancelamento.");
+      return;
+    }
+
+    setProcessingOrderId(orderId);
+    setError(null);
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      router.replace("/login");
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3333";
+      const response = await fetch(`${backendUrl}/orders/${orderId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ reason: rejectReason.trim() }),
+      });
+      const body = await response.json();
+
+      if (!response.ok) {
+        setError(body.error ?? "Falha ao recusar/cancelar o pedido.");
+        return;
+      }
+
+      setRejectingOrderId(null);
+      setRejectReason("");
+      await loadDashboard();
+    } catch {
+      setError("Não foi possível conectar ao backend agora.");
+    } finally {
+      setProcessingOrderId(null);
+    }
+  }
+
   if (loading) {
     return <div className="p-8 text-sm text-zinc-600 dark:text-zinc-400">Carregando...</div>;
   }
@@ -477,19 +521,54 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-4 py-2">
                       {(order.status === "PARTNER_CONFIRMATION" || order.status === "PREPARING") && (
-                        <button
-                          onClick={() =>
-                            handleOrderAction(order.id, order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready")
-                          }
-                          disabled={processingOrderId === order.id}
-                          className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
-                        >
-                          {processingOrderId === order.id
-                            ? "Enviando..."
-                            : order.status === "PARTNER_CONFIRMATION"
-                              ? "Aceitar"
-                              : "Pedido pronto"}
-                        </button>
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() =>
+                                handleOrderAction(
+                                  order.id,
+                                  order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready",
+                                )
+                              }
+                              disabled={processingOrderId === order.id}
+                              className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
+                            >
+                              {processingOrderId === order.id
+                                ? "Enviando..."
+                                : order.status === "PARTNER_CONFIRMATION"
+                                  ? "Aceitar"
+                                  : "Pedido pronto"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setRejectingOrderId(rejectingOrderId === order.id ? null : order.id);
+                                setRejectReason("");
+                                setError(null);
+                              }}
+                              disabled={processingOrderId === order.id}
+                              className="rounded border border-red-600 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950"
+                            >
+                              {order.status === "PARTNER_CONFIRMATION" ? "Não aceitar" : "Cancelar"}
+                            </button>
+                          </div>
+                          {rejectingOrderId === order.id && (
+                            <div className="flex flex-col gap-1 rounded border border-red-200 p-2 dark:border-red-900">
+                              <input
+                                value={rejectReason}
+                                onChange={(e) => setRejectReason(e.target.value)}
+                                placeholder="Motivo (ex: produto em falta)"
+                                className="w-48 rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                              />
+                              <button
+                                onClick={() => handleRejectOrder(order.id)}
+                                disabled={processingOrderId === order.id || !rejectReason.trim()}
+                                className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {processingOrderId === order.id ? "Enviando..." : "Confirmar"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>

@@ -116,6 +116,12 @@ export default function OrderDetailScreen() {
           <Text style={styles.muted}>Tempo estimado: ~{Math.round(details.etaMinutes)} min</Text>
         )}
         <Text style={styles.statusBadge}>{STATUS_LABELS[details.status] ?? details.status}</Text>
+        {details.status === "CANCELLED" && details.cancellationReason && (
+          <View style={styles.cancellationBox}>
+            <Text style={styles.cancellationLabel}>Motivo do cancelamento</Text>
+            <Text style={styles.cancellationText}>{details.cancellationReason}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -219,6 +225,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.red,
+  },
+  cancellationBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: "#fdecea",
+  },
+  cancellationLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#c0392b",
+  },
+  cancellationText: {
+    marginTop: 2,
+    fontSize: 13,
+    color: "#c0392b",
   },
   itemRow: {
     flexDirection: "row",

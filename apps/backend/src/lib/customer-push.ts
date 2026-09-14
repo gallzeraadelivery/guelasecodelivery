@@ -44,8 +44,20 @@ export async function notifyCustomerOfOrderStatus(
   orderId: string,
   status: string,
 ): Promise<void> {
-  const message = CUSTOMER_STATUS_MESSAGES[status];
+  let message = CUSTOMER_STATUS_MESSAGES[status];
   if (!message) return;
+
+  if (status === "CANCELLED") {
+    const { data: order } = await db
+      .from("orders")
+      .select("cancellation_reason")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (order?.cancellation_reason) {
+      message = `Seu pedido foi cancelado pela distribuidora: ${order.cancellation_reason}`;
+    }
+  }
+
   await sendToOrderCustomer(db, orderId, message, { orderId, status });
 }
 

@@ -293,6 +293,7 @@ export type OrderDetails = {
   totalCents: number | null;
   createdAt: string;
   canCancel: boolean;
+  cancellationReason: string | null;
 };
 
 export async function getOrderDetails(
@@ -303,7 +304,7 @@ export async function getOrderDetails(
   const { data: order, error } = await db
     .from("orders")
     .select(
-      "id, status, payment_method, partner_id, subtotal_cents, service_fee_cents, delivery_fee_cents, total_cents, created_at",
+      "id, status, payment_method, partner_id, subtotal_cents, service_fee_cents, delivery_fee_cents, total_cents, created_at, cancellation_reason",
     )
     .eq("id", orderId)
     .eq("customer_id", customerId)
@@ -358,16 +359,56 @@ export async function getOrderDetails(
     totalCents: order.total_cents,
     createdAt: order.created_at,
     canCancel: CUSTOMER_CANCELLABLE_STATUSES.includes(order.status as OrderStatus),
+    cancellationReason: order.cancellation_reason,
   };
 }
 
 /**
+ * Se já existe um pagamento online aprovado (cartão/Pix), estorna ANTES de
+ * marcar o pedido como cancelado — não queremos ficar com o dinheiro do
+ * cliente e o pedido cancelado ao mesmo tempo por causa de um erro no meio
+ * do caminho. Pedidos em dinheiro na entrega não têm esse problema (nada
+ * foi cobrado ainda). Compartilhado entre cancelamento pelo cliente e
+ * recusa/cancelamento pela distribuidora.
+ */
+async function refundApprovedPaymentIfAny(
+  db: SupabaseClient,
+  provider: PaymentProvider | null,
+  orderId: string,
+  partnerId: string | null,
+): Promise<void> {
+  const { data: payment } = await db
+    .from("payments")
+    .select("id, external_id, provider")
+    .eq("order_id", orderId)
+    .eq("status", "APPROVED")
+    .neq("provider", "cash_on_delivery")
+    .maybeSingle();
+
+  if (!payment?.external_id) return;
+
+  if (!provider) {
+    throw new Error("Gateway de pagamento não configurado — não é possível estornar automaticamente.");
+  }
+
+  const { data: account } = await db
+    .from("partner_payment_accounts")
+    .select("access_token")
+    .eq("partner_id", partnerId)
+    .maybeSingle();
+
+  if (!account) {
+    throw new Error("Não foi possível encontrar a conta da distribuidora para estornar o pagamento.");
+  }
+
+  await provider.refundPayment(payment.external_id, account.access_token);
+  await db.from("payments").update({ status: "REFUNDED" }).eq("id", payment.id);
+}
+
+/**
  * Cancelamento pelo cliente — só liberado antes da distribuidora aceitar
- * (ver CUSTOMER_CANCELLABLE_STATUSES). Libera a reserva de estoque quando
- * havia uma. NÃO estorna pagamento online já capturado (cartão/Pix
- * aprovados) — isso ainda depende de reembolso manual via Mercado Pago,
- * não implementado; pedidos em dinheiro na entrega não têm esse problema
- * (nada foi cobrado ainda).
+ * (ver CUSTOMER_CANCELLABLE_STATUSES). Libera a reserva de estoque e estorna
+ * pagamento online já aprovado, se houver.
  */
 export async function cancelOrder(
   db: SupabaseClient,
@@ -393,37 +434,8 @@ export async function cancelOrder(
     );
   }
 
-  // Se já existe um pagamento online aprovado (cartão/Pix), precisa estornar
-  // ANTES de marcar o pedido como cancelado — não queremos ficar com o
-  // dinheiro do cliente e o pedido cancelado ao mesmo tempo por causa de um
-  // erro no meio do caminho.
   if (status === "PARTNER_CONFIRMATION") {
-    const { data: payment } = await db
-      .from("payments")
-      .select("id, external_id, provider")
-      .eq("order_id", orderId)
-      .eq("status", "APPROVED")
-      .neq("provider", "cash_on_delivery")
-      .maybeSingle();
-
-    if (payment?.external_id) {
-      if (!provider) {
-        throw new Error("Gateway de pagamento não configurado — não é possível estornar automaticamente.");
-      }
-
-      const { data: account } = await db
-        .from("partner_payment_accounts")
-        .select("access_token")
-        .eq("partner_id", order.partner_id)
-        .maybeSingle();
-
-      if (!account) {
-        throw new Error("Não foi possível encontrar a conta da distribuidora para estornar o pagamento.");
-      }
-
-      await provider.refundPayment(payment.external_id, account.access_token);
-      await db.from("payments").update({ status: "REFUNDED" }).eq("id", payment.id);
-    }
+    await refundApprovedPaymentIfAny(db, provider, orderId, order.partner_id);
   }
 
   await transitionOrder(db, orderId, status, "CANCELLED", {
@@ -434,4 +446,60 @@ export async function cancelOrder(
   if (status === "STOCK_RESERVED" || status === "AWAITING_PAYMENT" || status === "PARTNER_CONFIRMATION") {
     await db.rpc("release_order_stock", { p_order_id: orderId });
   }
+}
+
+/**
+ * Status em que a distribuidora ainda pode recusar/cancelar o pedido —
+ * cobre tanto "não aceitar" (PARTNER_CONFIRMATION) quanto "cancelar depois
+ * de já ter aceitado" (ACCEPTED/PREPARING), mas só antes do pedido entrar
+ * na busca por entregador (READY_FOR_PICKUP em diante) — depois disso um
+ * entregador pode já estar envolvido, o que exige um fluxo à parte.
+ */
+const PARTNER_REJECTABLE_STATUSES: OrderStatus[] = ["PARTNER_CONFIRMATION", "ACCEPTED", "PREPARING"];
+
+export class OrderNotRejectableError extends Error {}
+
+/**
+ * A distribuidora recusa (antes de aceitar) ou cancela (depois de aceitar,
+ * ainda em preparo) o pedido, com um motivo obrigatório — mostrado pro
+ * cliente tanto na notificação push quanto no detalhe do pedido
+ * (orders.cancellation_reason). Estorna pagamento online já aprovado e
+ * libera a reserva de estoque, igual ao cancelamento pelo cliente.
+ */
+export async function rejectOrderByPartner(
+  db: SupabaseClient,
+  provider: PaymentProvider | null,
+  orderId: string,
+  partnerId: string,
+  reason: string,
+): Promise<void> {
+  const { data: order, error } = await db
+    .from("orders")
+    .select("id, status")
+    .eq("id", orderId)
+    .eq("partner_id", partnerId)
+    .maybeSingle();
+
+  if (error || !order) {
+    throw new OrderNotFoundError("Pedido não encontrado.");
+  }
+
+  const status = order.status as OrderStatus;
+  if (!PARTNER_REJECTABLE_STATUSES.includes(status)) {
+    throw new OrderNotRejectableError(
+      "Este pedido já avançou demais pra ser recusado/cancelado por aqui — fale com o suporte.",
+    );
+  }
+
+  await refundApprovedPaymentIfAny(db, provider, orderId, partnerId);
+
+  await db.from("orders").update({ cancellation_reason: reason }).eq("id", orderId);
+
+  await transitionOrder(db, orderId, status, "CANCELLED", {
+    reason: "partner_rejected",
+    actor: "partner",
+    metadata: { partner_reason: reason },
+  });
+
+  await db.rpc("release_order_stock", { p_order_id: orderId });
 }
