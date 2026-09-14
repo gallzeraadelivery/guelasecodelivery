@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "br.com.guelaseco.cliente",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E5252A",
         "foregroundImage": "./assets/android-icon-foreground.png",
