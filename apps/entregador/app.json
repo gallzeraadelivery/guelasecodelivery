@@ -47,6 +47,15 @@
         {
           "androidGoogleMapsApiKey": "AIzaSyBbuj7QDq4ouiKKf69HJ0qPnU9-OqOxcBs"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain"
+        }
       ]
     ],
     "extra": {

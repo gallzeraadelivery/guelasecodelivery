@@ -38,6 +38,15 @@
         {
           "color": "#E5252A"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain"
+        }
       ]
     ],
     "owner": "gallzeraaoficials-team",
