@@ -14,9 +14,8 @@
     "android": {
       "package": "br.com.guelaseco.entregador",
       "adaptiveIcon": {
-        "backgroundColor": "#E5252A",
+        "backgroundColor": "#FFD400",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,

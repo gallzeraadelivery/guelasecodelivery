@@ -143,6 +143,18 @@ export default function StatusScreen() {
       throw new Error("Permissão de localização negada.");
     }
 
+    // watchPositionAsync só chama o callback quando o aparelho se move
+    // distanceInterval — se o entregador ficar online parado (comum em
+    // testes, e mesmo em uso real logo ao abrir o app), nunca dispararia
+    // nenhuma atualização. Por isso pega a posição atual direto aqui, antes
+    // de começar a observar o movimento.
+    const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    await supabase.from("driver_locations").upsert({
+      driver_id: session.user.id,
+      location: `POINT(${current.coords.longitude} ${current.coords.latitude})`,
+      updated_at: new Date().toISOString(),
+    });
+
     locationSubscription.current?.remove();
     locationSubscription.current = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.Balanced, timeInterval: LOCATION_UPDATE_INTERVAL_MS, distanceInterval: LOCATION_UPDATE_DISTANCE_M },
