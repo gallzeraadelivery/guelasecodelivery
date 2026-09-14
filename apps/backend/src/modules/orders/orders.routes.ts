@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUserId, UnauthorizedError } from "../../lib/auth.js";
 import { createServiceClient } from "../../lib/supabase.js";
-import { cancelOrder, createOrder, getOrderDetails } from "./orders.service.js";
+import { cancelOrder, createOrder, getOrderDetails, getOrderTracking } from "./orders.service.js";
 import {
   AddressWithoutLocationError,
   EmptyCartError,
@@ -91,6 +91,29 @@ export async function ordersRoutes(app: FastifyInstance): Promise<void> {
       }
       app.log.error(error);
       return reply.code(500).send({ error: "Falha ao buscar pedido." });
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/orders/:id/tracking", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) {
+        return reply.code(401).send({ error: error.message });
+      }
+      throw error;
+    }
+
+    try {
+      const tracking = await getOrderTracking(db, request.params.id, userId);
+      return reply.send(tracking);
+    } catch (error) {
+      if (error instanceof OrderNotFoundError) {
+        return reply.code(404).send({ error: error.message });
+      }
+      app.log.error(error);
+      return reply.code(500).send({ error: "Falha ao buscar localização do pedido." });
     }
   });
 

@@ -1,16 +1,40 @@
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import MapView, { Marker } from "react-native-maps";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useSession } from "../../src/context/session";
 import { supabase } from "../../src/lib/supabase";
-import { BackendError, cancelOrder, getOrderDetails, type OrderDetails } from "../../src/lib/backend";
+import {
+  BackendError,
+  cancelOrder,
+  getOrderDetails,
+  getOrderTracking,
+  type OrderDetails,
+  type OrderTracking,
+} from "../../src/lib/backend";
 import { STATUS_LABELS } from "../../src/lib/orderStatus";
 import { colors } from "../../src/theme/colors";
+
+const TRACKABLE_DELIVERY_STATUSES = ["TO_PICKUP", "AT_PICKUP", "DELIVERING"];
+const TRACKING_ORDER_STATUSES = ["DRIVER_ASSIGNED", "DRIVER_TO_PICKUP", "PICKED_UP", "IN_DELIVERY"];
+const TRACKING_POLL_MS = 8_000;
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   ONLINE: "Pago online",
   CASH_ON_DELIVERY: "Dinheiro na entrega",
 };
+
+type OrderRating = { stars: number; comment: string | null };
 
 function formatCents(cents: number | null): string {
   if (cents === null) return "—";
@@ -32,6 +56,13 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
+  const [rating, setRating] = useState<OrderRating | null>(null);
+  const [selectedStars, setSelectedStars] = useState(0);
+  const [ratingComment, setRatingComment] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const [tracking, setTracking] = useState<OrderTracking | null>(null);
+
   const load = useCallback(() => {
     if (!session || !id) return;
     getOrderDetails(session.access_token, id)
@@ -40,9 +71,38 @@ export default function OrderDetailScreen() {
         Alert.alert("Não foi possível carregar o pedido", "Tente novamente em instantes.");
       })
       .finally(() => setLoading(false));
+
+    supabase
+      .from("order_ratings")
+      .select("stars, comment")
+      .eq("order_id", id)
+      .maybeSingle<OrderRating>()
+      .then(({ data }) => setRating(data));
   }, [session, id]);
 
   useFocusEffect(load);
+
+  useEffect(() => {
+    if (!session || !id || !details || !TRACKING_ORDER_STATUSES.includes(details.status)) {
+      return;
+    }
+
+    let cancelled = false;
+    function poll() {
+      getOrderTracking(session!.access_token, id!)
+        .then((data) => {
+          if (!cancelled) setTracking(data);
+        })
+        .catch(() => {});
+    }
+
+    poll();
+    const interval = setInterval(poll, TRACKING_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [session, id, details]);
 
   async function handleCancel() {
     if (!session || !id) return;
@@ -99,6 +159,28 @@ export default function OrderDetailScreen() {
     router.push(`/support/${data.id}`);
   }
 
+  async function handleSubmitRating() {
+    if (!session || !id || selectedStars === 0) return;
+    setSubmittingRating(true);
+    try {
+      const { error } = await supabase.from("order_ratings").insert({
+        order_id: id,
+        customer_id: session.user.id,
+        stars: selectedStars,
+        comment: ratingComment.trim() || null,
+      });
+
+      if (error) {
+        Alert.alert("Não foi possível enviar", error.message);
+        return;
+      }
+
+      setRating({ stars: selectedStars, comment: ratingComment.trim() || null });
+    } finally {
+      setSubmittingRating(false);
+    }
+  }
+
   if (loading || !details) {
     return (
       <View style={styles.center}>
@@ -123,6 +205,40 @@ export default function OrderDetailScreen() {
           </View>
         )}
       </View>
+
+      {TRACKING_ORDER_STATUSES.includes(details.status) &&
+        tracking &&
+        tracking.deliveryStatus &&
+        TRACKABLE_DELIVERY_STATUSES.includes(tracking.deliveryStatus) &&
+        (tracking.driver || tracking.dropoff) && (
+        <View style={styles.mapSection}>
+          <MapView
+            style={styles.map}
+            region={{
+              latitude: (tracking.driver ?? tracking.dropoff)!.lat,
+              longitude: (tracking.driver ?? tracking.dropoff)!.lng,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            }}
+          >
+            {tracking.dropoff && (
+              <Marker
+                coordinate={{ latitude: tracking.dropoff.lat, longitude: tracking.dropoff.lng }}
+                title="Seu endereço"
+                pinColor={colors.red}
+              />
+            )}
+            {tracking.driver && (
+              <Marker
+                coordinate={{ latitude: tracking.driver.lat, longitude: tracking.driver.lng }}
+                title="Entregador"
+                pinColor="#1a73e8"
+              />
+            )}
+          </MapView>
+          <Text style={styles.muted}>Acompanhe seu entregador em tempo real</Text>
+        </View>
+      )}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Itens</Text>
@@ -186,6 +302,52 @@ export default function OrderDetailScreen() {
           <Text style={styles.contactButtonSecondaryText}>Falar com o suporte GUELA SECO</Text>
         </Pressable>
       </View>
+
+      {details.status === "DELIVERED" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Como foi seu pedido?</Text>
+          {rating ? (
+            <>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Text key={star} style={styles.starDisplay}>
+                    {star <= rating.stars ? "★" : "☆"}
+                  </Text>
+                ))}
+              </View>
+              {rating.comment && <Text style={styles.muted}>{rating.comment}</Text>}
+            </>
+          ) : (
+            <>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Pressable key={star} onPress={() => setSelectedStars(star)} hitSlop={6}>
+                    <Text style={styles.starTappable}>{star <= selectedStars ? "★" : "☆"}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                value={ratingComment}
+                onChangeText={setRatingComment}
+                placeholder="Comentário (opcional)"
+                style={styles.commentInput}
+                multiline
+              />
+              <Pressable
+                style={[styles.contactButton, selectedStars === 0 && styles.buttonDisabled]}
+                onPress={handleSubmitRating}
+                disabled={selectedStars === 0 || submittingRating}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.contactButtonText}>Enviar avaliação</Text>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -225,6 +387,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.red,
+  },
+  mapSection: {
+    gap: 6,
+  },
+  map: {
+    width: "100%",
+    height: 200,
+    borderRadius: 10,
   },
   cancellationBox: {
     marginTop: 10,
@@ -298,5 +468,29 @@ const styles = StyleSheet.create({
   contactButtonSecondaryText: {
     color: colors.text,
     fontWeight: "600",
+  },
+  starsRow: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  starDisplay: {
+    fontSize: 22,
+    color: "#f5a623",
+  },
+  starTappable: {
+    fontSize: 32,
+    color: "#f5a623",
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 10,
+    minHeight: 60,
+    textAlignVertical: "top",
+    fontSize: 14,
+  },
+  buttonDisabled: {
+    opacity: 0.4,
   },
 });

@@ -503,3 +503,54 @@ export async function rejectOrderByPartner(
 
   await db.rpc("release_order_stock", { p_order_id: orderId });
 }
+
+export type OrderTracking = {
+  deliveryStatus: string | null;
+  driver: { lat: number; lng: number } | null;
+  dropoff: { lat: number; lng: number } | null;
+};
+
+/**
+ * Localização em tempo real pro cliente acompanhar o pedido no mapa —
+ * mesmas RPCs (get_driver_location/get_address_location) já usadas pro
+ * mapa do entregador, só que aqui verificando dono do pedido em vez de
+ * dono da entrega. driver_locations não tem RLS pro cliente ler direto,
+ * por isso passa pelo backend com service_role.
+ */
+export async function getOrderTracking(db: SupabaseClient, orderId: string, customerId: string): Promise<OrderTracking> {
+  const { data: order, error } = await db
+    .from("orders")
+    .select("id, address_id")
+    .eq("id", orderId)
+    .eq("customer_id", customerId)
+    .maybeSingle();
+
+  if (error || !order) {
+    throw new OrderNotFoundError("Pedido não encontrado.");
+  }
+
+  const { data: delivery } = await db
+    .from("deliveries")
+    .select("status, driver_id")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const [{ data: driverLocation }, { data: dropoffLocation }] = await Promise.all([
+    delivery?.driver_id
+      ? db.rpc("get_driver_location", { p_driver_id: delivery.driver_id }).maybeSingle<{
+          lat: number;
+          lng: number;
+        }>()
+      : Promise.resolve({ data: null }),
+    db.rpc("get_address_location", { p_address_id: order.address_id }).maybeSingle<{
+      lat: number;
+      lng: number;
+    }>(),
+  ]);
+
+  return {
+    deliveryStatus: delivery?.status ?? null,
+    driver: driverLocation ?? null,
+    dropoff: dropoffLocation ?? null,
+  };
+}

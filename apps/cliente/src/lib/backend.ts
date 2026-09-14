@@ -160,6 +160,26 @@ export async function getOrderDetails(accessToken: string, orderId: string): Pro
   return body as OrderDetails;
 }
 
+export type OrderTracking = {
+  deliveryStatus: string | null;
+  driver: { lat: number; lng: number } | null;
+  dropoff: { lat: number; lng: number } | null;
+};
+
+export async function getOrderTracking(accessToken: string, orderId: string): Promise<OrderTracking> {
+  const response = await fetch(`${backendUrl}/orders/${orderId}/tracking`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar localização do pedido.", response.status);
+  }
+
+  return body as OrderTracking;
+}
+
 export async function cancelOrder(accessToken: string, orderId: string): Promise<void> {
   const response = await fetch(`${backendUrl}/orders/${orderId}/cancel`, {
     method: "POST",

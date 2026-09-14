@@ -68,6 +68,7 @@ export default function WalletScreen() {
   const [availableCents, setAvailableCents] = useState(0);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRow[]>([]);
+  const [ratingSummary, setRatingSummary] = useState<{ avg_stars: number; ratings_count: number } | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [amount, setAmount] = useState("");
@@ -80,7 +81,7 @@ export default function WalletScreen() {
   const load = useCallback(async () => {
     if (!session) return;
 
-    const [walletResult, ledgerResult, withdrawalsResult] = await Promise.all([
+    const [walletResult, ledgerResult, withdrawalsResult, ratingResult] = await Promise.all([
       // RLS de wallet_balances filtra pelo wallet_ledger subjacente — a view
       // já retorna só a linha da própria carteira do entregador autenticado,
       // sem precisar informar driver_id explicitamente.
@@ -97,11 +98,15 @@ export default function WalletScreen() {
         .order("created_at", { ascending: false })
         .limit(10)
         .returns<WithdrawalRow[]>(),
+      supabase
+        .rpc("get_driver_rating_summary", { p_driver_id: session.user.id })
+        .maybeSingle<{ avg_stars: number; ratings_count: number }>(),
     ]);
 
     setAvailableCents(walletResult.data?.available_cents ?? 0);
     setLedger(ledgerResult.data ?? []);
     setWithdrawals(withdrawalsResult.data ?? []);
+    setRatingSummary(ratingResult.data ?? null);
     setLoading(false);
     setRefreshing(false);
   }, [session]);
@@ -169,6 +174,13 @@ export default function WalletScreen() {
       <View style={styles.balanceCard}>
         <Text style={styles.balanceLabel}>Saldo disponível</Text>
         <Text style={styles.balanceValue}>{formatCents(availableCents)}</Text>
+
+        {ratingSummary && ratingSummary.ratings_count > 0 && (
+          <Text style={styles.ratingText}>
+            ⭐ {ratingSummary.avg_stars.toFixed(1)} ({ratingSummary.ratings_count}{" "}
+            {ratingSummary.ratings_count === 1 ? "avaliação" : "avaliações"})
+          </Text>
+        )}
 
         {!showForm ? (
           <Pressable style={styles.button} onPress={() => setShowForm(true)}>
@@ -282,6 +294,10 @@ const styles = StyleSheet.create({
   balanceValue: {
     fontSize: 32,
     fontWeight: "700",
+  },
+  ratingText: {
+    fontSize: 14,
+    color: "#666",
   },
   button: {
     backgroundColor: colors.red,
