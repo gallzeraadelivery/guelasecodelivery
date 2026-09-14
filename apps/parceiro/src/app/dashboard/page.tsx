@@ -60,6 +60,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState<string | null>(null);
   const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [partnerStatus, setPartnerStatus] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
+  const [togglingStoreStatus, setTogglingStoreStatus] = useState(false);
   const [mpConnected, setMpConnected] = useState(false);
   const [connectingMp, setConnectingMp] = useState(false);
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -78,11 +81,12 @@ export default function DashboardPage() {
 
     const { data: membership, error: membershipError } = await supabase
       .from("partner_users")
-      .select("partner_id, partners(trade_name, mercadopago_account_id)")
+      .select("partner_id, role, partners(trade_name, mercadopago_account_id, status)")
       .eq("profile_id", session.user.id)
       .maybeSingle<{
         partner_id: string;
-        partners: { trade_name: string; mercadopago_account_id: string | null } | null;
+        role: string;
+        partners: { trade_name: string; mercadopago_account_id: string | null; status: string } | null;
       }>();
 
     if (membershipError) {
@@ -99,6 +103,8 @@ export default function DashboardPage() {
 
     setPartnerId(membership.partner_id);
     setPartnerName(membership.partners?.trade_name ?? null);
+    setPartnerStatus(membership.partners?.status ?? null);
+    setIsOwner(membership.role === "owner");
     setMpConnected(Boolean(membership.partners?.mercadopago_account_id));
 
     const { data: products, error: productsError } = await supabase
@@ -176,6 +182,23 @@ export default function DashboardPage() {
       price_cents: priceCents,
       inventory: { ...row.inventory, stock_quantity: stockQuantity, reserved_quantity: row.inventory?.reserved_quantity ?? 0 },
     });
+  }
+
+  async function handleToggleStoreStatus() {
+    if (!partnerId || partnerStatus === "BLOCKED") return;
+    const nextStatus = partnerStatus === "ONLINE" ? "OFFLINE" : "ONLINE";
+
+    setTogglingStoreStatus(true);
+    setError(null);
+
+    const { error: statusError } = await supabase.from("partners").update({ status: nextStatus }).eq("id", partnerId);
+
+    if (statusError) {
+      setError(statusError.message);
+    } else {
+      setPartnerStatus(nextStatus);
+    }
+    setTogglingStoreStatus(false);
   }
 
   async function handleSignOut() {
@@ -277,6 +300,31 @@ export default function DashboardPage() {
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Catálogo e estoque</p>
           </div>
           <div className="flex items-center gap-3">
+            {partnerStatus === "BLOCKED" ? (
+              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+                Bloqueada pelo suporte
+              </span>
+            ) : isOwner ? (
+              <button
+                onClick={handleToggleStoreStatus}
+                disabled={togglingStoreStatus}
+                className={`rounded-full px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
+                  partnerStatus === "ONLINE"
+                    ? "bg-green-100 text-green-800 hover:bg-green-200"
+                    : "bg-zinc-200 text-zinc-700 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-300"
+                }`}
+              >
+                {togglingStoreStatus
+                  ? "Salvando..."
+                  : partnerStatus === "ONLINE"
+                    ? "🟢 Loja aberta"
+                    : "⚪ Loja fechada"}
+              </button>
+            ) : (
+              <span className="rounded-full bg-zinc-200 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                {partnerStatus === "ONLINE" ? "🟢 Loja aberta" : "⚪ Loja fechada"}
+              </span>
+            )}
             {mpConnected ? (
               <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
                 Mercado Pago conectado
