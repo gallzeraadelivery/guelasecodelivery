@@ -19,14 +19,12 @@ const CUSTOMER_STATUS_MESSAGES: Partial<Record<string, string>> = {
   CANCELLED: "Seu pedido foi cancelado.",
 };
 
-export async function notifyCustomerOfOrderStatus(
+async function sendToOrderCustomer(
   db: SupabaseClient,
   orderId: string,
-  status: string,
+  message: string,
+  data?: Record<string, unknown>,
 ): Promise<void> {
-  const message = CUSTOMER_STATUS_MESSAGES[status];
-  if (!message) return;
-
   const { data: order } = await db.from("orders").select("customer_id").eq("id", orderId).maybeSingle();
   if (!order?.customer_id) return;
 
@@ -37,6 +35,20 @@ export async function notifyCustomerOfOrderStatus(
     .maybeSingle();
 
   if (customer?.push_token) {
-    await sendExpoPushNotification(customer.push_token, "GUELA SECO", message, { orderId, status });
+    await sendExpoPushNotification(customer.push_token, "GUELA SECO", message, data);
   }
+}
+
+export async function notifyCustomerOfOrderStatus(
+  db: SupabaseClient,
+  orderId: string,
+  status: string,
+): Promise<void> {
+  const message = CUSTOMER_STATUS_MESSAGES[status];
+  if (!message) return;
+  await sendToOrderCustomer(db, orderId, message, { orderId, status });
+}
+
+export async function notifyCustomerApproaching(db: SupabaseClient, orderId: string): Promise<void> {
+  await sendToOrderCustomer(db, orderId, "Seu entregador está chegando! Só mais alguns minutinhos. 🛵", { orderId });
 }

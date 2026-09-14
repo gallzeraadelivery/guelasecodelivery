@@ -5,6 +5,9 @@ import { estimateEtaMinutes } from "../fulfillment/eta.js";
 import { haversineKm } from "./geo.js";
 import { computeDriverPayoutCents } from "./payout.js";
 import { sendExpoPushNotification } from "../../lib/push.js";
+import { notifyCustomerApproaching } from "../../lib/customer-push.js";
+
+const APPROACHING_ETA_THRESHOLD_MINUTES = 5;
 
 type DeliveryRow = {
   id: string;
@@ -25,6 +28,14 @@ async function getPartnerLocation(db: SupabaseClient, partnerId: string) {
 
 async function getAddressLocation(db: SupabaseClient, addressId: string) {
   const { data } = await db.rpc("get_address_location", { p_address_id: addressId }).maybeSingle<{
+    lat: number;
+    lng: number;
+  }>();
+  return data ?? null;
+}
+
+async function getDriverLocation(db: SupabaseClient, driverId: string) {
+  const { data } = await db.rpc("get_driver_location", { p_driver_id: driverId }).maybeSingle<{
     lat: number;
     lng: number;
   }>();
@@ -194,5 +205,49 @@ export async function runDispatchSweep(db: SupabaseClient): Promise<void> {
   const { data: pending } = await db.rpc("find_deliveries_needing_offer");
   for (const row of (pending ?? []) as { delivery_id: string }[]) {
     await tryOfferNextCandidate(db, row.delivery_id);
+  }
+
+  await checkApproachingDeliveries(db);
+}
+
+/**
+ * Aviso proativo "entregador chegando" pro cliente (igual iFood): pra cada
+ * entrega a caminho do cliente que ainda não avisou, calcula a distância
+ * real da localização atual do entregador até o endereço e estima o ETA —
+ * se estiver a ~5 min ou menos, dispara a notificação uma única vez
+ * (approaching_dropoff_notified evita repetir a cada varredura).
+ */
+async function checkApproachingDeliveries(db: SupabaseClient): Promise<void> {
+  const { data: candidates } = await db.rpc("find_deliveries_needing_approach_check");
+  const rows = (candidates ?? []) as {
+    delivery_id: string;
+    order_id: string;
+    driver_id: string;
+    dropoff_address_id: string;
+  }[];
+
+  if (rows.length === 0) return;
+
+  const avgSpeedKmh = await getSetting(db, "logistics_avg_speed_kmh", z.number().positive());
+
+  for (const row of rows) {
+    const [driverLocation, dropoffLocation] = await Promise.all([
+      getDriverLocation(db, row.driver_id),
+      getAddressLocation(db, row.dropoff_address_id),
+    ]);
+    if (!driverLocation || !dropoffLocation) continue;
+
+    const distanceKm = haversineKm(
+      driverLocation.lat,
+      driverLocation.lng,
+      dropoffLocation.lat,
+      dropoffLocation.lng,
+    );
+    const etaMinutes = estimateEtaMinutes(distanceKm, avgSpeedKmh, 0);
+
+    if (etaMinutes <= APPROACHING_ETA_THRESHOLD_MINUTES) {
+      await db.from("deliveries").update({ approaching_dropoff_notified: true }).eq("id", row.delivery_id);
+      await notifyCustomerApproaching(db, row.order_id);
+    }
   }
 }
