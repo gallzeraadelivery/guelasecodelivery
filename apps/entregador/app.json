@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "GUELA SECO Entregador",
+    "name": "Guela Seco Driver",
     "slug": "guela-seco-entregador",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,6 +36,13 @@
           "locationWhenInUsePermission": "O GUELA SECO Entregador usa sua localização para te oferecer corridas próximas e acompanhar a entrega."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5fd7508e-4420-464e-a9cd-ef7f1af8d4e5"
+      }
+    },
+    "owner": "gallzeraaoficials-team"
   }
 }
