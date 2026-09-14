@@ -101,3 +101,17 @@ export async function requestWithdrawal(
 
   return body as { withdrawalId: string; status: string };
 }
+
+export async function getSupportContact(accessToken: string): Promise<{ whatsapp: string }> {
+  const response = await fetch(`${backendUrl}/support/contact`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar contato de suporte.", response.status);
+  }
+
+  return body as { whatsapp: string };
+}

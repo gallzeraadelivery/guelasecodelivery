@@ -8,6 +8,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="signup" />
+        <Stack.Screen name="profile/personal" options={{ headerShown: true, title: "Dados pessoais" }} />
         <Stack.Screen name="(tabs)" />
       </Stack>
     </SessionProvider>
