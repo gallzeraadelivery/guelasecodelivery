@@ -16,6 +16,7 @@ type PartnerOrder = {
   status: string;
   total_cents: number | null;
   created_at: string;
+  order_items: { quantity: number; catalog_products: { name: string; brand: string | null } | null }[];
 };
 
 type CatalogSearchResult = {
@@ -148,7 +149,7 @@ export default function DashboardPage() {
 
     const { data: partnerOrders } = await supabase
       .from("orders")
-      .select("id, status, total_cents, created_at")
+      .select("id, status, total_cents, created_at, order_items(quantity, catalog_products(name, brand))")
       .eq("partner_id", membership.partner_id)
       .in("status", ORDER_VISIBLE_STATUSES)
       .order("created_at", { ascending: true })
@@ -437,6 +438,7 @@ export default function DashboardPage() {
               <thead>
                 <tr className="border-b border-zinc-200 text-left text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
                   <th className="px-4 py-2">Pedido</th>
+                  <th className="px-4 py-2">Itens pra separar</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Total</th>
                   <th className="px-4 py-2" />
@@ -445,7 +447,7 @@ export default function DashboardPage() {
               <tbody>
                 {orders.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                    <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
                       Nenhum pedido aguardando ação.
                     </td>
                   </tr>
@@ -454,6 +456,18 @@ export default function DashboardPage() {
                   <tr key={order.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
                     <td className="px-4 py-2 font-mono text-xs text-black dark:text-zinc-50">
                       {order.id.slice(0, 8)}
+                    </td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      <ul className="space-y-0.5">
+                        {order.order_items.map((item, index) => (
+                          <li key={index}>
+                            {item.quantity}x {item.catalog_products?.name ?? "Item"}
+                            {item.catalog_products?.brand && (
+                              <span className="text-zinc-500"> ({item.catalog_products.brand})</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </td>
                     <td className="px-4 py-2 text-black dark:text-zinc-50">
                       {ORDER_STATUS_LABELS[order.status] ?? order.status}
