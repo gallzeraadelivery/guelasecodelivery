@@ -1,62 +1,63 @@
-import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { supabase } from "../../src/lib/supabase";
 import { useSession } from "../../src/context/session";
-import type { Address } from "../../src/lib/types";
+import { colors } from "../../src/theme/colors";
+
+type MenuItem = {
+  label: string;
+  onPress: () => void;
+};
 
 export default function ProfileScreen() {
   const { session } = useSession();
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [fullName, setFullName] = useState<string | null>(null);
 
-  const loadAddresses = useCallback(() => {
+  const load = useCallback(() => {
+    if (!session) return;
     supabase
-      .from("addresses")
-      .select("id, label, address_line, number, complement, neighborhood, city, state, postal_code, is_default")
-      .order("is_default", { ascending: false })
-      .then(({ data }) => setAddresses(data ?? []));
-  }, []);
+      .from("profiles")
+      .select("full_name")
+      .eq("id", session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setFullName(data?.full_name ?? null));
+  }, [session]);
 
-  useEffect(() => {
-    loadAddresses();
-  }, [loadAddresses]);
-
-  useFocusEffect(loadAddresses);
+  useFocusEffect(load);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
 
+  const menuItems: MenuItem[] = [
+    { label: "Dados pessoais", onPress: () => router.push("/profile/personal") },
+    { label: "Meus endereços", onPress: () => router.push("/profile/addresses") },
+    { label: "Meus pedidos", onPress: () => router.push("/(tabs)/orders") },
+    { label: "Suporte", onPress: () => router.push("/support") },
+  ];
+
   return (
     <View style={styles.container}>
-      <Text style={styles.email}>{session?.user.email}</Text>
+      <View style={styles.header}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarInitial}>{(fullName ?? session?.user.email ?? "?").charAt(0).toUpperCase()}</Text>
+        </View>
+        <View style={styles.headerInfo}>
+          <Text style={styles.name}>{fullName || "Complete seu nome"}</Text>
+          <Text style={styles.email}>{session?.user.email}</Text>
+        </View>
+      </View>
 
-      <Text style={styles.sectionTitle}>Meus endereços</Text>
-      <FlatList
-        data={addresses}
-        keyExtractor={(item) => item.id}
-        ListEmptyComponent={<Text style={styles.empty}>Nenhum endereço cadastrado.</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.addressCard}>
-            <Text style={styles.addressLabel}>
-              {item.label || "Endereço"} {item.is_default ? "· padrão" : ""}
-            </Text>
-            <Text style={styles.addressText}>
-              {item.address_line}
-              {item.number ? `, ${item.number}` : ""} — {item.city}/{item.state}
-            </Text>
-          </View>
-        )}
-      />
-
-      <Pressable style={styles.addAddressButton} onPress={() => router.push("/address")}>
-        <Text style={styles.addAddressButtonText}>+ Adicionar endereço</Text>
-      </Pressable>
-
-      <Pressable style={styles.addAddressButton} onPress={() => router.push("/support")}>
-        <Text style={styles.addAddressButtonText}>Suporte</Text>
-      </Pressable>
+      <View style={styles.menu}>
+        {menuItems.map((item) => (
+          <Pressable key={item.label} style={styles.menuItem} onPress={item.onPress}>
+            <Text style={styles.menuItemText}>{item.label}</Text>
+            <Text style={styles.menuItemChevron}>›</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Pressable style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutButtonText}>Sair</Text>
@@ -70,45 +71,56 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
     padding: 16,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.red,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitial: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  headerInfo: {
+    flex: 1,
+  },
+  name: {
+    fontSize: 17,
+    fontWeight: "700",
   },
   email: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  sectionTitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 8,
-  },
-  empty: {
-    color: "#999",
     fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
   },
-  addressCard: {
-    borderWidth: 1,
-    borderColor: "#eee",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
+  menu: {
+    borderTopWidth: 1,
+    borderColor: colors.border,
   },
-  addressLabel: {
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  addressText: {
-    fontSize: 13,
-    color: "#666",
-  },
-  addAddressButton: {
-    borderWidth: 1,
-    borderColor: "#000",
-    borderRadius: 8,
-    paddingVertical: 10,
+  menuItem: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  addAddressButtonText: {
-    fontWeight: "600",
+  menuItemText: {
+    fontSize: 15,
+  },
+  menuItemChevron: {
+    fontSize: 18,
+    color: colors.textMuted,
   },
   signOutButton: {
     marginTop: "auto",
@@ -116,7 +128,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   signOutButtonText: {
-    color: "#c00",
+    color: colors.error,
     fontWeight: "600",
   },
 });

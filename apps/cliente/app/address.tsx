@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,13 +11,16 @@ import {
   View,
 } from "react-native";
 import * as Location from "expo-location";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { supabase } from "../src/lib/supabase";
 import { colors } from "../src/theme/colors";
 import { useSession } from "../src/context/session";
 
 export default function AddressScreen() {
   const { session } = useSession();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEditing = Boolean(id);
+
   const [label, setLabel] = useState("");
   const [addressLine, setAddressLine] = useState("");
   const [number, setNumber] = useState("");
@@ -30,6 +33,30 @@ export default function AddressScreen() {
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(isEditing);
+
+  useEffect(() => {
+    if (!id) return;
+    supabase
+      .from("addresses")
+      .select("label, address_line, number, complement, neighborhood, city, state, postal_code, is_default")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setLabel(data.label ?? "");
+          setAddressLine(data.address_line ?? "");
+          setNumber(data.number ?? "");
+          setComplement(data.complement ?? "");
+          setNeighborhood(data.neighborhood ?? "");
+          setCity(data.city ?? "Cuiabá");
+          setState(data.state ?? "MT");
+          setPostalCode(data.postal_code ?? "");
+          setIsDefault(data.is_default ?? false);
+        }
+        setLoadingExisting(false);
+      });
+  }, [id]);
 
   async function handleUseCurrentLocation() {
     setLocating(true);
@@ -74,8 +101,7 @@ export default function AddressScreen() {
 
     setSaving(true);
 
-    const { error } = await supabase.from("addresses").insert({
-      customer_id: session.user.id,
+    const payload = {
       label: label || null,
       address_line: addressLine,
       number: number || null,
@@ -85,8 +111,12 @@ export default function AddressScreen() {
       state,
       postal_code: postalCode || null,
       is_default: isDefault,
-      location: coords ? `POINT(${coords.longitude} ${coords.latitude})` : null,
-    });
+      ...(coords ? { location: `POINT(${coords.longitude} ${coords.latitude})` } : {}),
+    };
+
+    const { error } = isEditing
+      ? await supabase.from("addresses").update(payload).eq("id", id)
+      : await supabase.from("addresses").insert({ ...payload, customer_id: session.user.id });
 
     setSaving(false);
 
@@ -96,6 +126,14 @@ export default function AddressScreen() {
     }
 
     router.back();
+  }
+
+  if (loadingExisting) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.red} />
+      </View>
+    );
   }
 
   return (
@@ -142,7 +180,11 @@ export default function AddressScreen() {
       </View>
 
       <Pressable style={styles.saveButton} onPress={handleSave} disabled={saving}>
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Salvar endereço</Text>}
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveButtonText}>{isEditing ? "Atualizar endereço" : "Salvar endereço"}</Text>
+        )}
       </Pressable>
     </ScrollView>
   );
@@ -152,6 +194,11 @@ const styles = StyleSheet.create({
   container: {
     padding: 24,
     gap: 12,
+  },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   row: {
     flexDirection: "row",
