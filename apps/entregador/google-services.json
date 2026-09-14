@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "418781908873",
+    "project_id": "guelaseco-99b93",
+    "storage_bucket": "guelaseco-99b93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:418781908873:android:58b3a85aabf8086a9f9b58",
+        "android_client_info": {
+          "package_name": "br.com.guelaseco.entregador"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwiuXFztFR4Y12tLpZzk2-v6YFgDN9-E0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
