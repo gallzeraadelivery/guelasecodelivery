@@ -266,28 +266,14 @@ export default function StatusScreen() {
         const { status } = await Notifications.requestPermissionsAsync();
         finalStatus = status;
       }
-      if (finalStatus !== "granted") {
-        Alert.alert("Push (diagnóstico)", `Permissão de notificação não concedida: ${finalStatus}`);
-        return;
-      }
+      if (finalStatus !== "granted") return;
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       const pushToken = await Notifications.getExpoPushTokenAsync({ projectId });
 
-      const { error } = await supabase
-        .from("drivers")
-        .update({ push_token: pushToken.data })
-        .eq("id", session.user.id);
-
-      if (error) {
-        Alert.alert("Push (diagnóstico)", `Falhou salvar no banco: ${error.message}`);
-      } else {
-        Alert.alert("Push (diagnóstico)", `Token registrado: ${pushToken.data.slice(0, 30)}...`);
-      }
-    } catch (error) {
-      // não bloqueia ficar online — o alerta é só temporário, pra diagnosticar
-      // por que o token nunca registrou no teste real.
-      Alert.alert("Push (diagnóstico)", `Erro: ${(error as Error).message}`);
+      await supabase.from("drivers").update({ push_token: pushToken.data }).eq("id", session.user.id);
+    } catch {
+      // silencioso de propósito — ver comentário acima.
     }
   }
 
