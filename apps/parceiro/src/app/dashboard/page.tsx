@@ -18,7 +18,31 @@ type PartnerOrder = {
   created_at: string;
 };
 
-const ORDER_ACTIONABLE_STATUSES = ["PARTNER_CONFIRMATION", "PREPARING"];
+// A busca por entregador agora começa no "Aceitar" (roda em paralelo ao
+// preparo, seção decidida em conversa) — um entregador pode ser encontrado
+// antes da distribuidora clicar "Pronto", o que já move o status do pedido
+// pra frente sozinho. Por isso a lista mostra até PICKED_UP, não só
+// PARTNER_CONFIRMATION/PREPARING, senão o pedido some da tela antes da
+// distribuidora terminar de fato com ele.
+const ORDER_VISIBLE_STATUSES = [
+  "PARTNER_CONFIRMATION",
+  "PREPARING",
+  "READY_FOR_PICKUP",
+  "SEARCHING_DRIVER",
+  "DRIVER_ASSIGNED",
+  "DRIVER_TO_PICKUP",
+  "PICKED_UP",
+];
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  PARTNER_CONFIRMATION: "Aguardando você aceitar",
+  PREPARING: "Em preparo",
+  READY_FOR_PICKUP: "Pronto — aguardando entregador",
+  SEARCHING_DRIVER: "Procurando entregador",
+  DRIVER_ASSIGNED: "Entregador a caminho da retirada",
+  DRIVER_TO_PICKUP: "Entregador a caminho da retirada",
+  PICKED_UP: "Retirado pelo entregador",
+};
 
 function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
@@ -104,7 +128,7 @@ export default function DashboardPage() {
       .from("orders")
       .select("id, status, total_cents, created_at")
       .eq("partner_id", membership.partner_id)
-      .in("status", ORDER_ACTIONABLE_STATUSES)
+      .in("status", ORDER_VISIBLE_STATUSES)
       .order("created_at", { ascending: true })
       .returns<PartnerOrder[]>();
 
@@ -302,24 +326,28 @@ export default function DashboardPage() {
                     <td className="px-4 py-2 font-mono text-xs text-black dark:text-zinc-50">
                       {order.id.slice(0, 8)}
                     </td>
-                    <td className="px-4 py-2 text-black dark:text-zinc-50">{order.status}</td>
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">
+                      {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                    </td>
                     <td className="px-4 py-2 text-black dark:text-zinc-50">
                       {order.total_cents != null ? `R$ ${(order.total_cents / 100).toFixed(2)}` : "—"}
                     </td>
                     <td className="px-4 py-2">
-                      <button
-                        onClick={() =>
-                          handleOrderAction(order.id, order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready")
-                        }
-                        disabled={processingOrderId === order.id}
-                        className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
-                      >
-                        {processingOrderId === order.id
-                          ? "Enviando..."
-                          : order.status === "PARTNER_CONFIRMATION"
-                            ? "Aceitar"
-                            : "Pedido pronto"}
-                      </button>
+                      {(order.status === "PARTNER_CONFIRMATION" || order.status === "PREPARING") && (
+                        <button
+                          onClick={() =>
+                            handleOrderAction(order.id, order.status === "PARTNER_CONFIRMATION" ? "accept" : "ready")
+                          }
+                          disabled={processingOrderId === order.id}
+                          className="rounded bg-brand-red px-3 py-1 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
+                        >
+                          {processingOrderId === order.id
+                            ? "Enviando..."
+                            : order.status === "PARTNER_CONFIRMATION"
+                              ? "Aceitar"
+                              : "Pedido pronto"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

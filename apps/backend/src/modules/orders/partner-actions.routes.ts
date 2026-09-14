@@ -19,11 +19,29 @@ async function requirePartnerOrder(db: ReturnType<typeof createServiceClient>, o
 }
 
 /**
- * Fluxo do parceiro entre o pagamento confirmado e o início do dispatch
+ * Status possíveis assim que "Pronto" é clicado, sabendo que o dispatch já
+ * começou lá no "Aceitar" (ver abaixo) — um entregador pode já ter sido
+ * encontrado/atribuído antes da distribuidora terminar de preparar. Nesses
+ * casos "Pronto" não precisa (nem pode) mais mudar o status: só confirma
+ * que chegou tarde, sem erro.
+ */
+const STATUSES_PAST_PREPARING = [
+  "READY_FOR_PICKUP",
+  "SEARCHING_DRIVER",
+  "DRIVER_ASSIGNED",
+  "DRIVER_TO_PICKUP",
+  "PICKED_UP",
+];
+
+/**
+ * Fluxo do parceiro entre o pagamento confirmado e a entrega ao entregador
  * (seção 2 — "Aceita e prepara" acontece antes de "GUELA SECO procura o
- * melhor entregador"). Simplificado a duas ações: aceitar (que já cobre
- * ACCEPTED + PREPARING — não há uma ação real distinta entre elas) e marcar
- * pronto (que dispara o dispatch).
+ * melhor entregador"). Duas ações: aceitar (ACCEPTED + PREPARING, e já
+ * dispara a busca por entregador em paralelo ao preparo — não espera o
+ * "Pronto" pra começar a procurar, pra o entregador já estar a caminho
+ * quando o pedido ficar pronto) e marcar pronto (só atualiza o status
+ * visível pro cliente; se um entregador já foi encontrado antes disso,
+ * não faz nada além de confirmar).
  */
 export async function partnerOrderActionsRoutes(app: FastifyInstance): Promise<void> {
   const db = createServiceClient(app.config);
@@ -45,6 +63,7 @@ export async function partnerOrderActionsRoutes(app: FastifyInstance): Promise<v
 
     await transitionOrder(db, order.id, "PARTNER_CONFIRMATION", "ACCEPTED", { actor: "partner" });
     await transitionOrder(db, order.id, "ACCEPTED", "PREPARING", { actor: "partner" });
+    await startDispatchForOrder(db, order.id);
 
     return reply.send({ status: "PREPARING" });
   });
@@ -60,13 +79,18 @@ export async function partnerOrderActionsRoutes(app: FastifyInstance): Promise<v
 
     const order = await requirePartnerOrder(db, request.params.id, userId);
     if (!order) return reply.code(404).send({ error: "Pedido não encontrado." });
+
+    if (STATUSES_PAST_PREPARING.includes(order.status)) {
+      // O entregador já foi encontrado enquanto preparava — nada a fazer.
+      return reply.send({ status: order.status });
+    }
+
     if (order.status !== "PREPARING") {
       return reply.code(422).send({ error: "Este pedido não está em preparo." });
     }
 
     await transitionOrder(db, order.id, "PREPARING", "READY_FOR_PICKUP", { actor: "partner" });
     await transitionOrder(db, order.id, "READY_FOR_PICKUP", "SEARCHING_DRIVER", { actor: "system" });
-    await startDispatchForOrder(db, order.id);
 
     return reply.send({ status: "SEARCHING_DRIVER" });
   });
