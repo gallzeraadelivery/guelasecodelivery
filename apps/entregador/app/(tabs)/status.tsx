@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
@@ -22,6 +24,8 @@ import {
   markPickedUp,
   rejectOffer,
   submitKyc,
+  getDeliveryNavigation,
+  type NavigationPoint,
 } from "../../src/lib/backend";
 import { colors } from "../../src/theme/colors";
 
@@ -62,6 +66,11 @@ export default function StatusScreen() {
   const [respondingOffer, setRespondingOffer] = useState(false);
   const [activeDelivery, setActiveDelivery] = useState<ActiveDelivery | null>(null);
   const [updatingDelivery, setUpdatingDelivery] = useState(false);
+  const [navigation, setNavigation] = useState<{
+    target: "PICKUP" | "DROPOFF";
+    pickup: NavigationPoint;
+    dropoff: NavigationPoint;
+  } | null>(null);
 
   const [cpf, setCpf] = useState("");
   const [cnhNumber, setCnhNumber] = useState("");
@@ -137,6 +146,21 @@ export default function StatusScreen() {
       setActiveDelivery(null);
     }
   }, [driver, loadActiveDelivery]);
+
+  useEffect(() => {
+    if (!session || !activeDelivery) {
+      setNavigation(null);
+      return;
+    }
+    getDeliveryNavigation(session.access_token, activeDelivery.id)
+      .then(setNavigation)
+      .catch(() => setNavigation(null));
+  }, [session, activeDelivery]);
+
+  function openExternalNavigation(point: NavigationPoint) {
+    if (point.lat === null || point.lng === null) return;
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`);
+  }
 
   async function startLocationUpdates() {
     if (!session) return;
@@ -356,9 +380,38 @@ export default function StatusScreen() {
   }
 
   if (driver.status !== "ONLINE" && driver.status !== "OFFLINE") {
+    const navTarget = navigation ? (navigation.target === "PICKUP" ? navigation.pickup : navigation.dropoff) : null;
+    const hasCoords = navTarget && navTarget.lat !== null && navTarget.lng !== null;
+
     return (
       <View style={styles.container}>
         <Text style={styles.title}>{activeDelivery?.partners?.trade_name ?? "Corrida em andamento"}</Text>
+
+        {hasCoords && (
+          <>
+            <MapView
+              style={styles.map}
+              showsUserLocation
+              region={{
+                latitude: navTarget.lat as number,
+                longitude: navTarget.lng as number,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+              }}
+            >
+              <Marker
+                coordinate={{ latitude: navTarget.lat as number, longitude: navTarget.lng as number }}
+                title={navTarget.label}
+                description={navTarget.addressText ?? undefined}
+                pinColor={navigation?.target === "PICKUP" ? colors.red : "#1a73e8"}
+              />
+            </MapView>
+            {navTarget.addressText && <Text style={styles.note}>{navTarget.addressText}</Text>}
+            <Pressable style={styles.navigateButton} onPress={() => openExternalNavigation(navTarget)}>
+              <Text style={styles.navigateButtonText}>Abrir navegação (GPS)</Text>
+            </Pressable>
+          </>
+        )}
 
         {!activeDelivery ? (
           <ActivityIndicator />
@@ -498,6 +551,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#999",
     marginBottom: 8,
+  },
+  map: {
+    width: "100%",
+    height: 220,
+    borderRadius: 10,
+  },
+  navigateButton: {
+    backgroundColor: "#1a73e8",
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  navigateButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
   },
   input: {
     borderWidth: 1,

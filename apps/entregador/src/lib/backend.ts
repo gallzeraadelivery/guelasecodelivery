@@ -102,6 +102,25 @@ export async function requestWithdrawal(
   return body as { withdrawalId: string; status: string };
 }
 
+export type NavigationPoint = { label: string; addressText: string | null; lat: number | null; lng: number | null };
+
+export async function getDeliveryNavigation(
+  accessToken: string,
+  deliveryId: string,
+): Promise<{ target: "PICKUP" | "DROPOFF"; pickup: NavigationPoint; dropoff: NavigationPoint }> {
+  const response = await fetch(`${backendUrl}/deliveries/${deliveryId}/navigation`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao buscar dados de navegação.", response.status);
+  }
+
+  return body as { target: "PICKUP" | "DROPOFF"; pickup: NavigationPoint; dropoff: NavigationPoint };
+}
+
 export async function getSupportContact(accessToken: string): Promise<{ whatsapp: string }> {
   const response = await fetch(`${backendUrl}/support/contact`, {
     headers: { Authorization: `Bearer ${accessToken}` },

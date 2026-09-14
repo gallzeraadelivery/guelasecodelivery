@@ -40,7 +40,8 @@
         {
           "color": "#E5252A"
         }
-      ]
+      ],
+      "react-native-maps"
     ],
     "extra": {
       "router": {},

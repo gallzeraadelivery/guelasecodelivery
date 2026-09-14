@@ -86,4 +86,64 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       "Falha ao registrar conclusão da entrega.",
     ),
   );
+
+  // get_partner_location/get_address_location são restritas a service_role
+  // (usadas internamente pelo dispatch), então o app do entregador não pode
+  // chamá-las direto — este endpoint expõe só o necessário para o mapa/GPS
+  // da corrida ativa, e apenas para o entregador dono da entrega.
+  app.get<{ Params: { id: string } }>("/deliveries/:id/navigation", async (request, reply) => {
+    let userId: string;
+    try {
+      userId = await requireUserId(request, db);
+    } catch (error) {
+      if (error instanceof UnauthorizedError) return reply.code(401).send({ error: error.message });
+      throw error;
+    }
+
+    const { data: delivery } = await db
+      .from("deliveries")
+      .select("id, driver_id, status, pickup_partner_id, dropoff_address_id")
+      .eq("id", request.params.id)
+      .maybeSingle();
+
+    if (!delivery || delivery.driver_id !== userId) {
+      return reply.code(404).send({ error: "Entrega não encontrada." });
+    }
+
+    const [{ data: partner }, { data: address }, { data: pickupLocation }, { data: dropoffLocation }] =
+      await Promise.all([
+        db.from("partners").select("trade_name, address_line").eq("id", delivery.pickup_partner_id).maybeSingle(),
+        db
+          .from("addresses")
+          .select("address_line, number, neighborhood, city")
+          .eq("id", delivery.dropoff_address_id)
+          .maybeSingle(),
+        db.rpc("get_partner_location", { p_partner_id: delivery.pickup_partner_id }).maybeSingle<{
+          lat: number;
+          lng: number;
+        }>(),
+        db.rpc("get_address_location", { p_address_id: delivery.dropoff_address_id }).maybeSingle<{
+          lat: number;
+          lng: number;
+        }>(),
+      ]);
+
+    return reply.send({
+      target: delivery.status === "DELIVERING" ? "DROPOFF" : "PICKUP",
+      pickup: {
+        label: partner?.trade_name ?? "Distribuidora",
+        addressText: partner?.address_line ?? null,
+        lat: pickupLocation?.lat ?? null,
+        lng: pickupLocation?.lng ?? null,
+      },
+      dropoff: {
+        label: "Cliente",
+        addressText: address
+          ? [address.address_line, address.number, address.neighborhood, address.city].filter(Boolean).join(", ")
+          : null,
+        lat: dropoffLocation?.lat ?? null,
+        lng: dropoffLocation?.lng ?? null,
+      },
+    });
+  });
 }
