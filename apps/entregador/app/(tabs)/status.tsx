@@ -272,8 +272,9 @@ export default function StatusScreen() {
       const pushToken = await Notifications.getExpoPushTokenAsync({ projectId });
 
       await supabase.from("drivers").update({ push_token: pushToken.data }).eq("id", session.user.id);
-    } catch {
-      // silencioso de propósito — ver comentário acima.
+    } catch (error) {
+      // não bloqueia ficar online — só loga pra dar pra investigar via logcat.
+      console.warn("[push] falha ao registrar token:", error);
     }
   }
 

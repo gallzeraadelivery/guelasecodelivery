@@ -1,12 +1,28 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { requireUserId, UnauthorizedError } from "../../lib/auth.js";
 import { createServiceClient } from "../../lib/supabase.js";
+import { notifyCustomerOfOrderStatus } from "../../lib/customer-push.js";
 
 const NOT_FOUND_CODES = ["OFFER_NOT_FOUND", "DELIVERY_NOT_FOUND"];
 const CONFLICT_CODES = ["OFFER_NO_LONGER_AVAILABLE", "INVALID_DELIVERY_STATE"];
 
 export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
   const db = createServiceClient(app.config);
+
+  async function orderIdFromOfferId(offerId: string): Promise<string | null> {
+    const { data } = await db
+      .from("delivery_offers")
+      .select("deliveries(order_id)")
+      .eq("id", offerId)
+      .maybeSingle();
+    const deliveries = data?.deliveries as { order_id: string } | { order_id: string }[] | null;
+    return (Array.isArray(deliveries) ? deliveries[0]?.order_id : deliveries?.order_id) ?? null;
+  }
+
+  async function orderIdFromDeliveryId(deliveryId: string): Promise<string | null> {
+    const { data } = await db.from("deliveries").select("order_id").eq("id", deliveryId).maybeSingle();
+    return data?.order_id ?? null;
+  }
 
   async function callDriverRpc(
     request: FastifyRequest<{ Params: { id: string } }>,
@@ -15,6 +31,7 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
     idParam: string,
     successStatus: string,
     genericErrorMessage: string,
+    resolveOrderId?: (id: string) => Promise<string | null>,
   ) {
     let userId: string;
     try {
@@ -43,11 +60,27 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(500).send({ error: genericErrorMessage });
     }
 
+    if (resolveOrderId) {
+      const orderId = await resolveOrderId(request.params.id);
+      if (orderId) {
+        const { data: order } = await db.from("orders").select("status").eq("id", orderId).maybeSingle();
+        if (order?.status) await notifyCustomerOfOrderStatus(db, orderId, order.status);
+      }
+    }
+
     return reply.send({ status: successStatus });
   }
 
   app.post<{ Params: { id: string } }>("/deliveries/offers/:id/accept", (request, reply) =>
-    callDriverRpc(request, reply, "accept_delivery_offer", "p_offer_id", "ACCEPTED", "Falha ao aceitar a oferta."),
+    callDriverRpc(
+      request,
+      reply,
+      "accept_delivery_offer",
+      "p_offer_id",
+      "ACCEPTED",
+      "Falha ao aceitar a oferta.",
+      orderIdFromOfferId,
+    ),
   );
 
   app.post<{ Params: { id: string } }>("/deliveries/offers/:id/reject", (request, reply) =>
@@ -73,6 +106,7 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       "p_delivery_id",
       "DELIVERING",
       "Falha ao registrar retirada do pedido.",
+      orderIdFromDeliveryId,
     ),
   );
 
@@ -84,6 +118,7 @@ export async function dispatchRoutes(app: FastifyInstance): Promise<void> {
       "p_delivery_id",
       "DELIVERED",
       "Falha ao registrar conclusão da entrega.",
+      orderIdFromDeliveryId,
     ),
   );
 

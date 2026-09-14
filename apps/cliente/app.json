@@ -31,6 +31,12 @@
         {
           "locationWhenInUsePermission": "O GUELA SECO usa sua localização para encontrar distribuidoras próximas e calcular o tempo de entrega."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#E5252A"
+        }
       ]
     ],
     "owner": "gallzeraaoficials-team",

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertValidTransition, type OrderStatus } from "./order-state-machine.js";
+import { notifyCustomerOfOrderStatus } from "../../lib/customer-push.js";
 
 export async function transitionOrder(
   db: SupabaseClient,
@@ -26,4 +27,6 @@ export async function transitionOrder(
   if (historyError) {
     throw new Error(`Falha ao registrar histórico do pedido: ${historyError.message}`);
   }
+
+  await notifyCustomerOfOrderStatus(db, orderId, to);
 }
