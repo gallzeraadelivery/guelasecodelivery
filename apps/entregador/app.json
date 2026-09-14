@@ -41,7 +41,12 @@
           "color": "#E5252A"
         }
       ],
-      "react-native-maps"
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "AIzaSyBbuj7QDq4ouiKKf69HJ0qPnU9-OqOxcBs"
+        }
+      ]
     ],
     "extra": {
       "router": {},
