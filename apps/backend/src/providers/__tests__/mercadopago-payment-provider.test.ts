@@ -285,3 +285,42 @@ describe("MercadoPagoPaymentProvider.createPixPayment", () => {
     ).rejects.toThrow(/não retornou QR code/);
   });
 });
+
+describe("MercadoPagoPaymentProvider.refundPayment", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("chama o endpoint de refunds com o access_token da distribuidora", async () => {
+    const provider = buildProvider();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 999, status: "approved" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.refundPayment("777", "seller-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.mercadopago.com/v1/payments/777/refunds",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer seller-token" }),
+      }),
+    );
+    expect(result).toEqual({ refundId: "999", status: "approved" });
+  });
+
+  it("lança quando o Mercado Pago recusa o estorno", async () => {
+    const provider = buildProvider();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ message: "cannot refund" }),
+      }),
+    );
+
+    await expect(provider.refundPayment("777", "seller-token")).rejects.toThrow(/Falha ao estornar/);
+  });
+});

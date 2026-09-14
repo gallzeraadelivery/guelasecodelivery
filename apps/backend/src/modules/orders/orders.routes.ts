@@ -12,6 +12,7 @@ import {
   StockConflictError,
 } from "./orders.errors.js";
 import { getSetting } from "../../lib/settings.js";
+import { getPaymentProvider } from "../../providers/index.js";
 
 const supportContactSchema = z.object({ whatsapp: z.string() });
 
@@ -104,8 +105,15 @@ export async function ordersRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
 
+    let provider;
     try {
-      await cancelOrder(db, request.params.id, userId);
+      provider = getPaymentProvider(app.config);
+    } catch {
+      provider = null;
+    }
+
+    try {
+      await cancelOrder(db, provider, request.params.id, userId);
     } catch (error) {
       if (error instanceof OrderNotFoundError) {
         return reply.code(404).send({ error: error.message });

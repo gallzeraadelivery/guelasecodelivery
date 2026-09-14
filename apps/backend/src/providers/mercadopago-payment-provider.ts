@@ -10,6 +10,7 @@ import type {
   OAuthTokens,
   PaymentDetails,
   PaymentProvider,
+  RefundPaymentResult,
   WebhookEvent,
   WebhookHeaders,
 } from "./payment-provider.js";
@@ -231,6 +232,29 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
       ticketUrl: transactionData.ticket_url ?? null,
       raw: body,
     };
+  }
+
+  /**
+   * Estorno total — usado no cancelamento de pedido pelo cliente quando o
+   * pagamento (cartão/Pix) já tinha sido capturado. Sem `amount` no corpo,
+   * a API do Mercado Pago devolve o valor inteiro.
+   */
+  async refundPayment(paymentExternalId: string, sellerAccessToken: string): Promise<RefundPaymentResult> {
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentExternalId}/refunds`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${sellerAccessToken}`,
+        "X-Idempotency-Key": randomUUID(),
+      },
+    });
+
+    const body = await readJson<{ id: number | string; status?: string }>(response);
+    if (!response.ok) {
+      throw new Error(`Falha ao estornar pagamento no Mercado Pago: ${JSON.stringify(body)}`);
+    }
+
+    return { refundId: String(body.id), status: body.status ?? "approved" };
   }
 
   async getPaymentDetails(paymentExternalId: string, accessToken: string): Promise<PaymentDetails> {

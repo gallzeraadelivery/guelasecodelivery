@@ -72,6 +72,11 @@ export type CreatePixPaymentResult = {
   raw: unknown;
 };
 
+export type RefundPaymentResult = {
+  refundId: string;
+  status: string;
+};
+
 export type PaymentDetails = {
   externalId: string;
   externalReference: string | null;
@@ -106,6 +111,7 @@ export interface PaymentProvider {
   createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult>;
   createPixPayment(input: CreatePixPaymentInput): Promise<CreatePixPaymentResult>;
   getPaymentDetails(paymentExternalId: string, accessToken: string): Promise<PaymentDetails>;
+  refundPayment(paymentExternalId: string, sellerAccessToken: string): Promise<RefundPaymentResult>;
   /**
    * Token da própria aplicação (client_credentials, sem contexto de um
    * seller específico) — usado pelo webhook para consultar o pagamento

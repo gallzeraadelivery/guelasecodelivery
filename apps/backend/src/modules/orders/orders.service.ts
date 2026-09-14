@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSetting, serviceFeeRuleSchema } from "../../lib/settings.js";
 import { selectFulfillmentPartner } from "../fulfillment/selection.service.js";
 import type { CartItemInput, EvaluatedCandidate } from "../fulfillment/types.js";
+import type { PaymentProvider } from "../../providers/payment-provider.js";
 import { computeServiceFeeCents } from "./pricing.js";
 import { transitionOrder } from "./orders.repository.js";
 import type { OrderStatus } from "./order-state-machine.js";
@@ -357,10 +358,15 @@ export async function getOrderDetails(
  * não implementado; pedidos em dinheiro na entrega não têm esse problema
  * (nada foi cobrado ainda).
  */
-export async function cancelOrder(db: SupabaseClient, orderId: string, customerId: string): Promise<void> {
+export async function cancelOrder(
+  db: SupabaseClient,
+  provider: PaymentProvider | null,
+  orderId: string,
+  customerId: string,
+): Promise<void> {
   const { data: order, error } = await db
     .from("orders")
-    .select("id, status")
+    .select("id, status, partner_id")
     .eq("id", orderId)
     .eq("customer_id", customerId)
     .maybeSingle();
@@ -374,6 +380,39 @@ export async function cancelOrder(db: SupabaseClient, orderId: string, customerI
     throw new OrderNotCancellableError(
       "Este pedido já está em preparo e não pode mais ser cancelado por aqui — fale com a distribuidora ou com o suporte.",
     );
+  }
+
+  // Se já existe um pagamento online aprovado (cartão/Pix), precisa estornar
+  // ANTES de marcar o pedido como cancelado — não queremos ficar com o
+  // dinheiro do cliente e o pedido cancelado ao mesmo tempo por causa de um
+  // erro no meio do caminho.
+  if (status === "PARTNER_CONFIRMATION") {
+    const { data: payment } = await db
+      .from("payments")
+      .select("id, external_id, provider")
+      .eq("order_id", orderId)
+      .eq("status", "APPROVED")
+      .neq("provider", "cash_on_delivery")
+      .maybeSingle();
+
+    if (payment?.external_id) {
+      if (!provider) {
+        throw new Error("Gateway de pagamento não configurado — não é possível estornar automaticamente.");
+      }
+
+      const { data: account } = await db
+        .from("partner_payment_accounts")
+        .select("access_token")
+        .eq("partner_id", order.partner_id)
+        .maybeSingle();
+
+      if (!account) {
+        throw new Error("Não foi possível encontrar a conta da distribuidora para estornar o pagamento.");
+      }
+
+      await provider.refundPayment(payment.external_id, account.access_token);
+      await db.from("payments").update({ status: "REFUNDED" }).eq("id", payment.id);
+    }
   }
 
   await transitionOrder(db, orderId, status, "CANCELLED", {
