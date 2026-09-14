@@ -161,9 +161,24 @@ export default function StatusScreen() {
       .catch(() => setNavigation(null));
   }, [session, activeDelivery]);
 
-  function openExternalNavigation(point: NavigationPoint) {
+  async function openExternalNavigation(point: NavigationPoint) {
     if (point.lat === null || point.lng === null) return;
-    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`);
+
+    // Em alguns aparelhos/ROMs (ex: MIUI) o link https do Maps pode ser
+    // bloqueado quando aberto de dentro de outro app — nesses casos o intent
+    // nativo "geo:" do Android costuma funcionar normalmente.
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}&travelmode=driving`;
+    const geoUrl = `geo:${point.lat},${point.lng}?q=${point.lat},${point.lng}(${encodeURIComponent(point.label)})`;
+
+    try {
+      await Linking.openURL(mapsUrl);
+    } catch {
+      try {
+        await Linking.openURL(geoUrl);
+      } catch (error) {
+        Alert.alert("Não foi possível abrir a navegação", (error as Error).message);
+      }
+    }
   }
 
   useEffect(() => {
