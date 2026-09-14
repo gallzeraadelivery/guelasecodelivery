@@ -22,11 +22,41 @@ import {
   updateSetting,
 } from "./admin.service.js";
 import { getAntifraudeFlags } from "./antifraude.service.js";
+import {
+  CatalogProductNotFoundError,
+  createCategory,
+  createCatalogProduct,
+  listCategories,
+  listCatalogProducts,
+  setCatalogProductImage,
+  updateCatalogProduct,
+} from "./catalog.service.js";
 
 const updateSettingBodySchema = z.object({ value: z.unknown() });
 const approveWithdrawalBodySchema = z.object({ externalId: z.string().optional() });
 const failWithdrawalBodySchema = z.object({ reason: z.string().min(1) });
 const sendSupportMessageBodySchema = z.object({ body: z.string().min(1) });
+
+const createCategoryBodySchema = z.object({
+  name: z.string().min(1),
+  parentId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().default(0),
+});
+
+const catalogProductBodySchema = z.object({
+  name: z.string().min(1),
+  brand: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  unit: z.string().min(1).default("un"),
+  volumeMl: z.number().int().positive().nullable().optional(),
+  alcoholContentPct: z.number().nonnegative().nullable().optional(),
+  requiresAgeVerification: z.boolean().default(true),
+});
+
+const updateCatalogProductBodySchema = catalogProductBodySchema.partial().extend({
+  active: z.boolean().optional(),
+});
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   const db = createServiceClient(app.config);
@@ -207,6 +237,95 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     withAdmin(request, reply, async () => {
       const flags = await getAntifraudeFlags(db);
       return reply.send(flags);
+    }),
+  );
+
+  app.get("/admin/categories", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const categories = await listCategories(db);
+      return reply.send({ categories });
+    }),
+  );
+
+  app.post("/admin/categories", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const parsed = createCategoryBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "Corpo da requisição inválido.", details: parsed.error.issues });
+      }
+
+      const category = await createCategory(db, {
+        name: parsed.data.name,
+        parentId: parsed.data.parentId ?? null,
+        sortOrder: parsed.data.sortOrder,
+      });
+      return reply.code(201).send({ category });
+    }),
+  );
+
+  app.get<{ Querystring: { q?: string } }>("/admin/catalog-products", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const products = await listCatalogProducts(db, request.query.q);
+      return reply.send({ products });
+    }),
+  );
+
+  app.post("/admin/catalog-products", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const parsed = catalogProductBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "Corpo da requisição inválido.", details: parsed.error.issues });
+      }
+
+      const product = await createCatalogProduct(db, {
+        name: parsed.data.name,
+        brand: parsed.data.brand ?? null,
+        description: parsed.data.description ?? null,
+        categoryId: parsed.data.categoryId ?? null,
+        unit: parsed.data.unit,
+        volumeMl: parsed.data.volumeMl ?? null,
+        alcoholContentPct: parsed.data.alcoholContentPct ?? null,
+        requiresAgeVerification: parsed.data.requiresAgeVerification,
+      });
+      return reply.code(201).send({ product });
+    }),
+  );
+
+  app.patch<{ Params: { id: string } }>("/admin/catalog-products/:id", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const parsed = updateCatalogProductBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "Corpo da requisição inválido.", details: parsed.error.issues });
+      }
+
+      try {
+        const product = await updateCatalogProduct(db, request.params.id, parsed.data);
+        return reply.send({ product });
+      } catch (error) {
+        if (error instanceof CatalogProductNotFoundError) return reply.code(404).send({ error: error.message });
+        throw error;
+      }
+    }),
+  );
+
+  app.post<{ Params: { id: string } }>("/admin/catalog-products/:id/image", (request, reply) =>
+    withAdmin(request, reply, async () => {
+      const file = await request.file();
+      if (!file) return reply.code(400).send({ error: "Nenhum arquivo enviado." });
+
+      const buffer = await file.toBuffer();
+      try {
+        const product = await setCatalogProductImage(db, request.params.id, {
+          buffer,
+          filename: file.filename,
+          mimetype: file.mimetype,
+        });
+        return reply.send({ product });
+      } catch (error) {
+        if (error instanceof CatalogProductNotFoundError) return reply.code(404).send({ error: error.message });
+        app.log.error(error);
+        return reply.code(500).send({ error: "Falha ao enviar imagem." });
+      }
     }),
   );
 }

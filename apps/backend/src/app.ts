@@ -1,4 +1,5 @@
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Env } from "./env.js";
 import { driversRoutes } from "./modules/drivers/drivers.routes.js";
@@ -33,6 +34,9 @@ export function buildApp(env: Env): FastifyInstance {
   const allowedOrigins = env.ALLOWED_ORIGINS?.split(",").map((origin) => origin.trim()).filter(Boolean) ?? [];
   app.register(cors, {
     origin: allowedOrigins,
+  });
+  app.register(multipart, {
+    limits: { fileSize: 5 * 1024 * 1024 },
   });
 
   app.register(healthRoutes);

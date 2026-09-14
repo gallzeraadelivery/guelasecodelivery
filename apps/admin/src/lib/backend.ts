@@ -180,3 +180,88 @@ export const sendSupportMessage = (token: string, ticketId: string, body: string
 
 export const closeSupportTicket = (token: string, ticketId: string) =>
   adminFetch<{ status: string }>(token, `/admin/support/tickets/${ticketId}/close`, { method: "POST" });
+
+export type Category = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  sort_order: number;
+  active: boolean;
+};
+
+export const listCategories = (token: string) =>
+  adminFetch<{ categories: Category[] }>(token, "/admin/categories").then((r) => r.categories);
+
+export const createCategory = (token: string, input: { name: string; sortOrder: number }) =>
+  adminFetch<{ category: Category }>(token, "/admin/categories", { method: "POST", body: input }).then(
+    (r) => r.category,
+  );
+
+export type CatalogProduct = {
+  id: string;
+  name: string;
+  brand: string | null;
+  description: string | null;
+  category_id: string | null;
+  image_url: string | null;
+  unit: string;
+  volume_ml: number | null;
+  alcohol_content_pct: number | null;
+  requires_age_verification: boolean;
+  active: boolean;
+};
+
+export type CatalogProductInput = {
+  name: string;
+  brand: string | null;
+  description: string | null;
+  categoryId: string | null;
+  unit: string;
+  volumeMl: number | null;
+  alcoholContentPct: number | null;
+  requiresAgeVerification: boolean;
+};
+
+export const listCatalogProducts = (token: string, search?: string) =>
+  adminFetch<{ products: CatalogProduct[] }>(
+    token,
+    `/admin/catalog-products${search ? `?q=${encodeURIComponent(search)}` : ""}`,
+  ).then((r) => r.products);
+
+export const createCatalogProduct = (token: string, input: CatalogProductInput) =>
+  adminFetch<{ product: CatalogProduct }>(token, "/admin/catalog-products", { method: "POST", body: input }).then(
+    (r) => r.product,
+  );
+
+export const updateCatalogProduct = (
+  token: string,
+  id: string,
+  input: Partial<CatalogProductInput> & { active?: boolean },
+) =>
+  adminFetch<{ product: CatalogProduct }>(token, `/admin/catalog-products/${id}`, {
+    method: "PATCH",
+    body: input,
+  }).then((r) => r.product);
+
+export async function uploadCatalogProductImage(
+  token: string,
+  id: string,
+  file: File,
+): Promise<CatalogProduct> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${backendUrl}/admin/catalog-products/${id}/image`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const body = await response.json();
+
+  if (!response.ok) {
+    throw new BackendError(body.error ?? "Falha ao enviar imagem.", response.status);
+  }
+
+  return (body as { product: CatalogProduct }).product;
+}

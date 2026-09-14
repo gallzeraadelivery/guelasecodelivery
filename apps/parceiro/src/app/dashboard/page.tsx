@@ -18,6 +18,14 @@ type PartnerOrder = {
   created_at: string;
 };
 
+type CatalogSearchResult = {
+  id: string;
+  name: string;
+  brand: string | null;
+  image_url: string | null;
+  unit: string;
+};
+
 // A busca por entregador agora começa no "Aceitar" (roda em paralelo ao
 // preparo, seção decidida em conversa) — um entregador pode ser encontrado
 // antes da distribuidora clicar "Pronto", o que já move o status do pedido
@@ -68,6 +76,14 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [orders, setOrders] = useState<PartnerOrder[]>([]);
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
+
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogResults, setCatalogResults] = useState<CatalogSearchResult[]>([]);
+  const [selectedCatalogProduct, setSelectedCatalogProduct] = useState<CatalogSearchResult | null>(null);
+  const [newPriceReais, setNewPriceReais] = useState("");
+  const [newStock, setNewStock] = useState("");
+  const [addingProduct, setAddingProduct] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     const {
@@ -182,6 +198,71 @@ export default function DashboardPage() {
       price_cents: priceCents,
       inventory: { ...row.inventory, stock_quantity: stockQuantity, reserved_quantity: row.inventory?.reserved_quantity ?? 0 },
     });
+  }
+
+  async function handleSearchCatalog() {
+    if (!catalogSearch.trim()) {
+      setCatalogResults([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("catalog_products")
+      .select("id, name, brand, image_url, unit")
+      .ilike("name", `%${catalogSearch.trim()}%`)
+      .eq("active", true)
+      .limit(20)
+      .returns<CatalogSearchResult[]>();
+
+    setCatalogResults(data ?? []);
+  }
+
+  async function handleAddProduct() {
+    if (!partnerId || !selectedCatalogProduct) return;
+
+    const priceCents = reaisToCents(newPriceReais);
+    const stockQuantity = Number.parseInt(newStock, 10);
+
+    if (priceCents === null || Number.isNaN(stockQuantity) || stockQuantity < 0) {
+      setError("Preço ou estoque inválido.");
+      return;
+    }
+
+    setAddingProduct(true);
+    setError(null);
+
+    const { data: created, error: insertError } = await supabase
+      .from("partner_products")
+      .insert({
+        partner_id: partnerId,
+        catalog_product_id: selectedCatalogProduct.id,
+        price_cents: priceCents,
+        available: true,
+      })
+      .select("id")
+      .single();
+
+    if (insertError) {
+      setError(
+        insertError.code === "23505"
+          ? "Você já oferece esse produto — edite o preço/estoque dele na lista abaixo."
+          : insertError.message,
+      );
+      setAddingProduct(false);
+      return;
+    }
+
+    if (stockQuantity > 0) {
+      await supabase.from("inventory").update({ stock_quantity: stockQuantity }).eq("partner_product_id", created.id);
+    }
+
+    setShowAddProduct(false);
+    setSelectedCatalogProduct(null);
+    setCatalogSearch("");
+    setCatalogResults([]);
+    setNewPriceReais("");
+    setNewStock("");
+    setAddingProduct(false);
+    await loadDashboard();
   }
 
   async function handleToggleStoreStatus() {
@@ -402,6 +483,98 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Meus produtos</h2>
+            <button
+              onClick={() => setShowAddProduct((v) => !v)}
+              className="rounded bg-brand-red px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-red-dark"
+            >
+              {showAddProduct ? "Cancelar" : "+ Adicionar produto"}
+            </button>
+          </div>
+
+          {showAddProduct && (
+            <div className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Busque no catálogo — não é possível cadastrar um produto novo do zero, só selecionar da base já
+                existente.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearchCatalog()}
+                  placeholder="Buscar produto (ex: Heineken)..."
+                  className="w-64 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                />
+                <button
+                  onClick={handleSearchCatalog}
+                  className="rounded border border-zinc-300 px-3 py-1.5 text-xs dark:border-zinc-700"
+                >
+                  Buscar
+                </button>
+              </div>
+
+              {catalogResults.length > 0 && !selectedCatalogProduct && (
+                <ul className="max-h-48 space-y-1 overflow-y-auto">
+                  {catalogResults.map((product) => (
+                    <li key={product.id}>
+                      <button
+                        onClick={() => setSelectedCatalogProduct(product)}
+                        className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                      >
+                        {product.name}
+                        {product.brand && <span className="text-xs text-zinc-500">({product.brand})</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {selectedCatalogProduct && (
+                <div className="flex flex-wrap items-end gap-3 rounded border border-zinc-200 p-3 dark:border-zinc-800">
+                  <p className="text-sm font-medium text-black dark:text-zinc-50">
+                    {selectedCatalogProduct.name}
+                    {selectedCatalogProduct.brand && (
+                      <span className="ml-1 text-xs text-zinc-500">({selectedCatalogProduct.brand})</span>
+                    )}
+                  </p>
+                  <div>
+                    <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">Preço (R$)</label>
+                    <input
+                      value={newPriceReais}
+                      onChange={(e) => setNewPriceReais(e.target.value)}
+                      className="w-24 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-zinc-600 dark:text-zinc-400">Estoque inicial</label>
+                    <input
+                      value={newStock}
+                      onChange={(e) => setNewStock(e.target.value)}
+                      className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    />
+                  </div>
+                  <button
+                    onClick={handleAddProduct}
+                    disabled={addingProduct}
+                    className="rounded bg-brand-red px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-red-dark disabled:opacity-50"
+                  >
+                    {addingProduct ? "Adicionando..." : "Confirmar"}
+                  </button>
+                  <button
+                    onClick={() => setSelectedCatalogProduct(null)}
+                    className="text-xs text-zinc-600 dark:text-zinc-400"
+                  >
+                    Trocar produto
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
