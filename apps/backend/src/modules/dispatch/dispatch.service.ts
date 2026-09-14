@@ -156,7 +156,10 @@ async function findCandidate(
   return nearest ? { driverId: nearest.driver_id, distanceKm: nearest.distance_km } : null;
 }
 
-/** Varredura periódica (seção 27): expira ofertas vencidas e tenta a próxima
+/** Varredura periódica (seção 27): expira ofertas vencidas, cria a entrega
+ * de qualquer pedido "buscando entregador" que por algum motivo nunca
+ * ganhou uma (autocorreção — não deveria acontecer no fluxo normal, mas
+ * fecha a lacuna sem precisar de intervenção manual), e tenta a próxima
  * oferta para toda entrega que ficou sem oferta ativa. */
 export async function runDispatchSweep(db: SupabaseClient): Promise<void> {
   await db
@@ -164,6 +167,16 @@ export async function runDispatchSweep(db: SupabaseClient): Promise<void> {
     .update({ status: "EXPIRED" })
     .eq("status", "OFFERED")
     .lt("expires_at", new Date().toISOString());
+
+  const { data: orphanedOrders } = await db.rpc("find_orders_needing_delivery");
+  for (const row of (orphanedOrders ?? []) as { order_id: string }[]) {
+    try {
+      await startDispatchForOrder(db, row.order_id);
+    } catch {
+      // tenta de novo na próxima varredura — não deixa um pedido problemático
+      // travar a autocorreção dos outros.
+    }
+  }
 
   const { data: pending } = await db.rpc("find_deliveries_needing_offer");
   for (const row of (pending ?? []) as { delivery_id: string }[]) {
